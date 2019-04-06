@@ -1,4 +1,4 @@
-KidParser: KidParser.hs KidAST.hs
+KidParser: KidParser.hs KidAST.hs KidPrettyPrinter.hs
 	ghc KidParser.hs
 
 clean:
