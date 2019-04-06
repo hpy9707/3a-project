@@ -1,6 +1,7 @@
 module Main where
 
 import KidAST
+import KidPrettyPrinter
 import Data.Char
 import Text.Parsec
 import Text.Parsec.Expr
@@ -193,6 +194,9 @@ pLvalue
       
 -----------------------------------------------------------------
 -- main
+-- Parses the input file to create the appriopriate data structure,
+-- throwing an error if the structure is incorrect. The data structure
+-- is printed "as is" then "pretty printed" according to the spec. 
 -----------------------------------------------------------------
 
 pMain :: Parser KidProgram
@@ -211,7 +215,9 @@ main
        ; input <- readFile (head args)
        ; let output = runParser pMain 0 "" input
        ; case output of
-           Right ast -> print ast
+           Right ast -> do { print ast
+                           ; putStr (showProgram ast)
+                           }
            Left  err -> do { putStr "Parse error at "
                            ; print err
                            }

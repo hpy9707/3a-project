@@ -19,6 +19,8 @@ data Expr
   | IntConst Int
   | StrConst String
   | Id Ident
+  | Negation Expr
+  | UnaryMinus Expr
   | Eq Expr Expr
   | NotEq Expr Expr
   | LessThan Expr Expr
@@ -31,8 +33,6 @@ data Expr
   | Div Expr Expr
   | Conj Expr Expr
   | Disj Expr Expr
-  | Negation Expr
-  | UnaryMinus Expr
     deriving (Show, Eq)
 
 data Decl 
