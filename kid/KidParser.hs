@@ -144,7 +144,7 @@ pAsg
 -- and associativity.
 -----------------------------------------------------------------
 
-pExp, pFactor, pNum, pIdent, pString :: Parser Expr
+pExp, pFactor, pNum, pIdent, pString pFloat:: Parser Expr
 
 pExp 
   = pString <|> (buildExpressionParser table pFactor)
@@ -194,13 +194,13 @@ pFloat
                    ; char '.'
                    ; ds <- many1 digit 
                    ; let val = read (ws ++ ('.' : ds)) :: Float
-                   ; return (Num val)
+                   ; return (FloatConst val)
                    }
                )
               <|> 
                (do { ws <- many1 digit
                    ; let val = read ws :: Float
-                   ; return (Num val)
+                   ; return (FloatConst val)
                    }
                )
             )
