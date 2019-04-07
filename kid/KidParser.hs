@@ -1,8 +1,10 @@
 module Main where
 
 import KidAST
+import KidPrettyPrinter
 import Data.Char
 import Text.Parsec
+import Text.Parsec.Expr
 import Text.Parsec.Language (emptyDef)
 import qualified Text.Parsec.Token as Q
 import System.Environment
@@ -39,7 +41,7 @@ reservedOp = Q.reservedOp lexer
 myReserved, myOpnames :: [String]
 
 myReserved
-  = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write"]
+  = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write","else","float","String","do","fi","if","od","ref","then","val","while"]
 
 myOpnames 
   = ["+", "-", "*", ":="]
@@ -75,17 +77,29 @@ pProgBody
 pDecl :: Parser Decl
 pDecl
   = do
+      indicator<-pIndiType
       basetype <- pBaseType
       ident <- identifier
       whiteSpace
       semi
-      return (Decl ident basetype)
+      return (Decl indicator basetype ident)
+      
+pIndiType :: Parser IndiType
+pIndiType    
+  = do {reserved "val" ; return ValueType}
+  <|>
+    do {reserved "ref" ; return ReferType}
 
 pBaseType :: Parser BaseType
 pBaseType
   = do { reserved "bool"; return BoolType }
     <|>
     do { reserved "int"; return IntType }
+    <|>
+    do { reserved "float"; return FloatType } 
+    <|>
+    do { reserved "string"; return StringType } 
+
       
 -----------------------------------------------------------------
 --  pStmt is the main parser for statements. It wants to recognise
@@ -123,14 +137,41 @@ pAsg
 --  pExp is the main parser for expressions. It takes into account
 --  the operator precedences and the fact that the binary operators
 --  are left-associative.
+
+-- buildExpressionParser is a helper function from module Text.Parsec.Expr
+-- that allows easy parsing of expressions. table, prefix, binary,
+-- and relation define the possible operators, their precedence
+-- and associativity.
 -----------------------------------------------------------------
 
-pExp, pTerm, pFactor, pUminus, pNum, pIdent, pString :: Parser Expr
+pExp, pFactor, pNum, pIdent, pString :: Parser Expr
 
 pExp 
-  = pString <|> (chainl1 pTerm pAddOp)
+  = pString <|> (buildExpressionParser table pFactor)
     <?>
     "expression"
+
+pFactor
+  = choice [parens pExp, pNum, pIdent]
+    <?> 
+    "\"factor\""
+
+table = [ [ prefix "-" UnaryMinus ]
+        , [binary "*" Mul, binary "/" Div]
+        , [binary "+" Add, binary "-" Sub]
+        , [relation "=" Eq, relation "!=" NotEq, relation "<=" LessEqThan, 
+          relation ">=" GreaterEqThan, relation "<" LessThan, 
+          relation ">" GreaterThan]
+        , [prefix "!" Negation]
+        , [binary "&&" Conj]
+        , [binary "||" Disj] ]
+
+prefix name fun
+  = Prefix (do { reservedOp name; return fun })
+binary name op
+  = Infix (do { reservedOp name; return op }) AssocLeft
+relation name rel
+  = Infix (do { reservedOp name; return rel }) AssocNone
 
 pString 
   = do
@@ -141,41 +182,28 @@ pString
     <?>
     "string"
 
-pAddOp, pMulOp :: Parser (Expr -> Expr -> Expr)
-
-pAddOp
-  = do 
-      reservedOp "+"
-      return Add
-
-pTerm 
-  = chainl1 pFactor pMulOp
-    <?>
-    "\"term\""
-
-pMulOp
-  = do 
-      reservedOp "*"
-      return Mul
-
-pFactor
-  = choice [pUminus, parens pExp, pNum, pIdent]
-    <?> 
-    "\"factor\""
-
-pUminus
-  = do 
-      reservedOp "-"
-      exp <- pFactor
-      return (UnaryMinus exp)
-
 pNum
   = do
       n <- natural <?> ""
       return (IntConst (fromInteger n :: Int))
     <?>
     "number"
-
+pFloat 
+    = lexeme (try
+               (do { ws <- many1 digit
+                   ; char '.'
+                   ; ds <- many1 digit 
+                   ; let val = read (ws ++ ('.' : ds)) :: Float
+                   ; return (Num val)
+                   }
+               )
+              <|> 
+               (do { ws <- many1 digit
+                   ; let val = read ws :: Float
+                   ; return (Num val)
+                   }
+               )
+            )
 pIdent 
   = do
       ident <- identifier
@@ -193,6 +221,9 @@ pLvalue
       
 -----------------------------------------------------------------
 -- main
+-- Parses the input file to create the appriopriate data structure,
+-- throwing an error if the structure is incorrect. The data structure
+-- is printed "as is" then "pretty printed" according to the spec. 
 -----------------------------------------------------------------
 
 pMain :: Parser KidProgram
@@ -211,7 +242,9 @@ main
        ; input <- readFile (head args)
        ; let output = runParser pMain 0 "" input
        ; case output of
-           Right ast -> print ast
+           Right ast -> do { print ast
+                           ; putStr (showProgram ast)
+                           }
            Left  err -> do { putStr "Parse error at "
                            ; print err
                            }
