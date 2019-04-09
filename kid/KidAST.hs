@@ -6,6 +6,10 @@ module KidAST where
 
 type Ident = String
  
+data IndiType
+  = ValueType |ReferType
+    deriving (Show,Eq)
+
 data BaseType 
   = BoolType | IntType | StringType | FloatType
     deriving (Show, Eq)
