@@ -14,19 +14,26 @@ data Lvalue
   = LId Ident
     deriving (Show, Eq)
 
-data Binop 
-  = Op_add | Op_mul 
-    deriving (Show, Eq)
-
 data Expr
   = BoolConst Bool
   | IntConst Int
   | StrConst String
   | FloatConst Float
   | Id Ident
-  | Add Expr Expr
-  | Mul Expr Expr
+  | Negation Expr
   | UnaryMinus Expr
+  | Eq Expr Expr
+  | NotEq Expr Expr
+  | LessThan Expr Expr
+  | LessEqThan Expr Expr
+  | GreaterThan Expr Expr
+  | GreaterEqThan Expr Expr  
+  | Add Expr Expr
+  | Sub Expr Expr
+  | Mul Expr Expr
+  | Div Expr Expr
+  | Conj Expr Expr
+  | Disj Expr Expr
     deriving (Show, Eq)
 
 data Decl 

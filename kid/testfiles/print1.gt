@@ -1,0 +1,2 @@
+proc main ()
+begin i:=6*i + 4 - i; end
