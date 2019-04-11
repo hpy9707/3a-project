@@ -41,7 +41,7 @@ reservedOp = Q.reservedOp lexer
 myReserved, myOpnames :: [String]
 
 myReserved
-  = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write"]
+  = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write","call"]
 
 myOpnames 
   = ["+", "-", "*", ":=", "[", "]", ","]
@@ -123,12 +123,13 @@ pBaseType
 pStmt, pRead, pWrite, pAsg :: Parser Stmt
 
 pStmt 
-  = choice [pRead, pWrite, pAsg]
+  = try pRead <|> try pWrite <|> try pAsg <|> try pCall <|> try pIf 
+  <|> try pIfElse <|> try pWhile
 
 pRead
   = do 
       reserved "read"
-      lvalue <- pLvalue
+      lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
       semi
       return (Read lvalue)
 
@@ -141,12 +142,50 @@ pWrite
 
 pAsg
   = do
-      lvalue <- pLvalue
+      lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue 
       reservedOp ":="
       rvalue <- pExp
       semi
       return (Assign lvalue rvalue)
 
+pCall
+  = do
+    reserved "call"
+    ident <- identifier
+    reservedOp "("
+    expList <- sepBy1 pExp comma
+    reservedOp ")" 
+    semi
+    return ( Call ident expList ) 
+
+pIf
+  = do
+  reserved "if"
+  n <- pExp
+  reserved "then"
+  stmts <- many1 pStmt
+  reserved "fi"
+  return ( If n stmts)
+
+pIfElse
+  = do
+    reserved "if"
+    n <- pExp
+    reserved "then"
+    stmts <- many1 pStmt
+    reserved "else" 
+    stmts1 <- many1 pStmt
+    reserved "fi"
+    return (IfElse n stmts stmts1)
+
+pWhile
+  = do
+    reserved "while"
+    n <- pExp
+    reserved "do"
+    stmts <- many1 pStmt
+    reserved "od"
+    return ( While n stmts)
 -----------------------------------------------------------------
 --  pExp is the main parser for expressions. It takes into account
 --  the operator precedences and the fact that the binary operators
@@ -215,6 +254,31 @@ pLvalue
   = do
       ident <- identifier
       return (LId ident)
+    <?>
+    "lvalue"
+
+pLvalue1 :: Parser Lvalue
+pLvalue1
+  = do
+      ident <- identifier
+      whiteSpace
+      reservedOp "["
+      n <- pExp
+      reservedOp "]"
+      return (LId1 ident n)
+    <?>
+    "lvalue"
+pLvalue2 :: Parser Lvalue
+pLvalue2
+  = do
+      ident <- identifier
+      whiteSpace
+      reservedOp "["
+      n <- pExp
+      reservedOp ","
+      m <- pExp
+      reservedOp "]"
+      return (LId2 ident n m)
     <?>
     "lvalue"
       

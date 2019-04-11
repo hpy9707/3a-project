@@ -12,6 +12,8 @@ data BaseType
 
 data Lvalue 
   = LId Ident
+  | LId1 Ident Expr
+  | LId2 Ident Expr Expr
     deriving (Show, Eq)
 
 data Expr
@@ -45,7 +47,7 @@ data Stmt
   = Assign Lvalue Expr
   | Read Lvalue
   | Write Expr
-  | Call Ident [Expr]
+  | Call String [Expr]
   | If Expr [Stmt]
   | IfElse Expr [Stmt] [Stmt]
   | While Expr [Stmt]
