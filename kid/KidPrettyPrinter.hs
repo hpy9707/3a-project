@@ -48,9 +48,10 @@ showLvalue (LId id) = id
 showExpr :: Expr -> String
 showExpr (BoolConst b) = show b
 showExpr (IntConst i) = show i
+<<<<<<< HEAD
 showExpr (StrConst s) = s
 -- TODO: add and test FloatConst
-showExpr (Id id) = id
+--showExpr (Id id) = id
 showExpr (Negation expr) = "!" ++ (showExpr2 expr)
 showExpr (UnaryMinus expr) = "-" ++ (showExpr2 expr)
 showExpr (Add a b) = (showExpr2 a) ++ " + " ++ (showExpr2 b)
