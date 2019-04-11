@@ -59,6 +59,8 @@ pProg
       parens (return ())
       (decls,stmts) <- pProgBody
       return (Program decls stmts)
+      <?>
+      "program"
       
 -----------------------------------------------------------------
 --  pProgBody looks for a sequence of declarations followed by a
@@ -68,48 +70,58 @@ pProg
 pProgBody :: Parser ([Decl],[Stmt])
 pProgBody
   = do
-      decls <- many pDecl
-      reserved "begin"
-      stmts <- many1 pStmt
-      reserved "end"
-      return (decls,stmts)
+    decls <- many pDecl
+    reserved "begin"
+    stmts <- many1 pStmt
+    reserved "end"
+    return (decls,stmts)
+    <?>
+    "program body"
 
 pDecl, pDecl0, pDecl1, pDecl2 :: Parser Decl
 
 pDecl
   = do
-      d <- (try pDecl2 <|> try pDecl1 <|> pDecl0)
-      return d
+    d <- (try pDecl2 <|> try pDecl1 <|> pDecl0)
+    return d
+    <?>
+    "declaration"
 
 pDecl0
   = do
-      basetype <- pBaseType
-      ident <- identifier
-      whiteSpace
-      semi
-      return (Decl0 ident basetype)
+    basetype <- pBaseType
+    ident <- identifier
+    whiteSpace
+    semi
+    return (Decl0 ident basetype)
+    <?>
+    "declaration with no shape indicator"
 
 pDecl1
   = do
-      basetype <- pBaseType
-      ident <- identifier
-      whiteSpace
-      n <- squares pNum  
-      semi
-      return (Decl1 ident basetype n)
+    basetype <- pBaseType
+    ident <- identifier
+    whiteSpace
+    n <- squares pNum  
+    semi
+    return (Decl1 ident basetype n)
+    <?>
+    "declaration with one shape indicator"
 
 pDecl2
   = do
-      basetype <- pBaseType
-      ident <- identifier
-      whiteSpace
-      reservedOp "["
-      n <- pNum
-      reservedOp ","
-      m <- pNum
-      reservedOp "]" 
-      semi
-      return (Decl2 ident basetype n m)
+    basetype <- pBaseType
+    ident <- identifier
+    whiteSpace
+    reservedOp "["
+    n <- pNum
+    reservedOp ","
+    m <- pNum
+    reservedOp "]" 
+    semi
+    return (Decl2 ident basetype n m)
+    <?>
+    "declaration with two shape indicators"
 
 pBaseType :: Parser BaseType
 pBaseType
@@ -129,28 +141,36 @@ pStmt, pRead, pWrite, pAsg :: Parser Stmt
 pStmt 
   = try pRead <|> try pWrite <|> try pAsg <|> try pCall <|> try pIf 
   <|> try pIfElse <|> try pWhile
+  <?>
+  "statement"
 
 pRead
   = do 
-      reserved "read"
-      lvalue <- pLvalue
-      semi
-      return (Read lvalue)
+    reserved "read"
+    lvalue <- pLvalue
+    semi
+    return (Read lvalue)
+    <?>
+    "read"
 
 pWrite
   = do 
-      reserved "write"
-      exp <- (pString <|> pExp)
-      semi
-      return (Write exp)
+    reserved "write"
+    exp <- (pString <|> pExp)
+    semi
+    return (Write exp)
+    <?>
+    "write"
 
 pAsg
   = do
-      lvalue <- pLvalue
-      reservedOp ":="
-      rvalue <- pExp
-      semi
-      return (Assign lvalue rvalue)
+    lvalue <- pLvalue
+    reservedOp ":="
+    rvalue <- pExp
+    semi
+    return (Assign lvalue rvalue)
+    <?>
+    "assign"
 
 pCall
   = do
@@ -161,15 +181,19 @@ pCall
     reservedOp ")" 
     semi
     return ( Call ident expList ) 
+    <?>
+    "call"
 
 pIf
   = do
-  reserved "if"
-  n <- pExp
-  reserved "then"
-  stmts <- many1 pStmt
-  reserved "fi"
-  return ( If n stmts)
+    reserved "if"
+    n <- pExp
+    reserved "then"
+    stmts <- many1 pStmt
+    reserved "fi"
+    return ( If n stmts)
+    <?>
+    "if"
 
 pIfElse
   = do
@@ -181,6 +205,8 @@ pIfElse
     stmts1 <- many1 pStmt
     reserved "fi"
     return (IfElse n stmts stmts1)
+    <?>
+    "if else"
 
 pWhile
   = do
@@ -190,6 +216,8 @@ pWhile
     stmts <- many1 pStmt
     reserved "od"
     return ( While n stmts)
+    <?>
+    "while"
 
     
 -----------------------------------------------------------------
@@ -203,7 +231,8 @@ pWhile
 -- and associativity.
 -----------------------------------------------------------------
 
-pExp, pFactor, pNum, pLValExpr, pString :: Parser Expr
+pExp, pFactor, pNum, pBool, pLValExpr, pString :: Parser Expr
+pTrue, pFalse :: Parser Bool
 
 pExp 
   = pString <|> (buildExpressionParser table pFactor)
@@ -211,7 +240,7 @@ pExp
     "expression"
 
 pFactor
-  = try pLValExpr <|> try (parens pExp) <|> try pNum
+  = try pLValExpr <|> try (parens pExp) <|> try pNum <|> try pBool
     <?> 
     "\"factor\""
 
@@ -234,24 +263,47 @@ relation name rel
 
 pString 
   = do
-      char '"'
-      str <- many (satisfy (/= '"'))
-      char '"'
-      return (StrConst str)
+    char '"'
+    str <- many (satisfy (/= '"'))
+    char '"'
+    return (StrConst str)
     <?>
     "string"
 
 pNum
   = do
-      n <- natural <?> ""
-      return (IntConst (fromInteger n :: Int))
+    n <- natural <?> ""
+    return (IntConst (fromInteger n :: Int))
     <?>
     "number"
+
+pBool
+  = do
+    bool <- pTrue <|> pFalse
+    return (BoolConst bool)
+    <?>
+    "boolean"
+
+pTrue
+  = do
+    reserved "true"
+    return True
+    <?>
+    "true"
+      
+pFalse
+  = do
+    reserved "false"
+    return False
+    <?>
+    "false"
 
 pLValExpr
   = do
     lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
     return (LValExpr lvalue)
+    <?>
+    "LValExpr"
 
 -----------------------------------------------------------------
 -- pLValue
@@ -266,15 +318,17 @@ pLvalue, pLvalue0, pLvalue1, pLvalue2 :: Parser Lvalue
 
 pLvalue
   = do
-      val <- try pLvalue2 <|> try pLvalue1 <|> pLvalue0
-      return val
+    val <- try pLvalue2 <|> try pLvalue1 <|> pLvalue0
+    return val
+    <?>
+    "lvalue"
 
 pLvalue0
   = do
       ident <- identifier
       return (LId ident)
     <?>
-    "lvalue"
+    "lvalue with no shape indicator"
 
 pLvalue1
   = do
@@ -285,7 +339,7 @@ pLvalue1
       reservedOp "]"
       return (LId1 ident n)
     <?>
-    "lvalue"
+    "lvalue with one shape indicator"
 
 pLvalue2
   = do
@@ -298,7 +352,7 @@ pLvalue2
       reservedOp "]"
       return (LId2 ident n m)
     <?>
-    "lvalue"
+    "lvalue with two shape indicators"
       
 -----------------------------------------------------------------
 -- main

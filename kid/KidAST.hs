@@ -20,6 +20,7 @@ data Expr
   = BoolConst Bool
   | IntConst Int
   | StrConst String
+  -- TODO: add FloatConst
   | LValExpr Lvalue
   | Negation Expr
   | UnaryMinus Expr
