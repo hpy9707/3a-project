@@ -3,28 +3,68 @@ module KidPrettyPrinter where
 import KidAST
 import Data.List
 
+tab = "    "
+
 showProgram :: KidProgram -> String
 showProgram (Program decls stmts)
- = (intercalate "\n" (map showStmt stmts)) ++ "\n"
- -- TODO: do something with decls
+ = "proc\n" ++ (intercalate "\n" (map showDecl decls)) ++ "\nbegin\n" ++
+    (intercalate "\n" (map (showStmt 1) stmts)) ++ "\nend\n"
+ -- TODO: make sure declarations are limited to bool, float, int
 
-showStmt :: Stmt -> String
-showStmt (Assign lvalue expr)
- = (showLvalue lvalue) ++ " := " ++ (showExpr expr)
--- TODO: add more definitions of stmt here...
+showDecl :: Decl -> String
+showDecl (Decl id baseType) = tab ++ (showBaseType baseType) 
+    ++ " " ++ id ++ ";"
+-- TODO: change Decl above to Decl0
+--showDecl (Decl1 id baseType int) = tab ++ (showBaseType baseType) ++ 
+--" " ++ id ++ "[" ++ (show int) ++ "]" ++ ";"
+--showDecl (Decl2 id baseType int1 int2) = tab ++  (showBaseType baseType) ++ 
+--" " ++ id ++ "[" ++ (show int1) ++ "," ++ (show int2) ++ "]" ++ ";"
+
+showBaseType :: BaseType -> String
+showBaseType BoolType = "bool"
+showBaseType IntType = "int"
+-- showBaseType FloatType = "float"
+-- TODO: add floattype
+
+-- statements pass around an Int variable representing the number of tabs
+showStmt :: Int -> Stmt -> String
+showStmt t d = (concat $ replicate t tab) ++ (showStmt2 t d)
+
+showStmt2 :: Int -> Stmt -> String
+showStmt2 t (Assign lvalue expr) = (showLvalue lvalue) ++ " := " ++ (showExpr expr) ++ ";"
+showStmt2 t (Read lvalue) = "read " ++ (showLvalue lvalue) ++ ";"
+showStmt2 t (Write expr) = "write " ++ (showExpr expr) ++ ";"
+--showStmt2 t (Call id [args]) = "call " ++ (showId id) ++ "(" ++ (intercalate "," (map showExpr args)) ++ ";"
+--showStmt2 t (If expr stmts) = "if " ++ (showExpr expr) ++ " then\n" ++ (intercalate "\n" (map showStmt (t + 1) stmts)) ++ "\n" ++ (showStmt (t - 1) (Word "fi"))
+--showStmt2 t (IfElse expr stmts1 stmts2) = "if " ++ (showExpr expr) ++ " then\n" ++ (intercalate "\n" (map showStmt (t + 1) stmts1)) ++ (showStmt (t - 1) (Word "else")) ++ (intercalate "\n" (map showStmt (t + 1) stmts2))) ++ "\n" ++ (showStmt (t - 1) (Word "fi"))
+--showStmt2 t (While expr stmts) = "while " ++ (showExpr expr) ++ " do\n" ++ (intercalate "\n" (map showStmt (t + 1) stmts))) ++ "\n" ++ (showStmt (t - 1) (Word "od"))
+--showStmt2 t (Word str) = str
 
 showLvalue :: Lvalue -> String
 showLvalue (LId id) = id
--- TODO: add more...
+--showLvalue (LId1 id expr) = id ++ "[" ++ expr ++ "]"
+--showLvalue (LId2 id expr1 expr2) = id ++ "[" ++ expr1 ++ "," ++ expr2 ++ "]"
 
 showExpr :: Expr -> String
+showExpr (BoolConst b) = show b
 showExpr (IntConst i) = show i
+showExpr (StrConst s) = s
+-- TODO: add and test FloatConst
 showExpr (Id id) = id
+showExpr (Negation expr) = "!" ++ (showExpr2 expr)
+showExpr (UnaryMinus expr) = "-" ++ (showExpr2 expr)
 showExpr (Add a b) = (showExpr2 a) ++ " + " ++ (showExpr2 b)
 showExpr (Sub a b) = (showExpr2 a) ++ " - " ++ (showExpr2 b)
 showExpr (Mul a b) = (showExpr2 a) ++ " * " ++ (showExpr2 b)
 showExpr (Div a b) = (showExpr2 a) ++ " / " ++ (showExpr2 b)
--- TODO: add more...
+showExpr (Eq a b) = (showExpr2 a) ++ " = " ++ (showExpr2 b)
+showExpr (NotEq a b) = (showExpr2 a) ++ " != " ++ (showExpr2 b)
+showExpr (LessThan a b) = (showExpr2 a) ++ " < " ++ (showExpr2 b)
+showExpr (LessEqThan a b) = (showExpr2 a) ++ " <= " ++ (showExpr2 b)
+showExpr (GreaterThan a b) = (showExpr2 a) ++ " > " ++ (showExpr2 b)
+showExpr (GreaterEqThan a b) = (showExpr2 a) ++ " >= " ++ (showExpr2 b)
+showExpr (Conj a b) = (showExpr2 a) ++ " && " ++ (showExpr2 b)
+showExpr (Disj a b) = (showExpr2 a) ++ " || " ++ (showExpr2 b)
 
 -- This function deals with recursively nested expressions. 
 -- Brackets are printed around the inner expression if it is binary.

@@ -49,6 +49,7 @@ data Stmt
   | If Expr [Stmt]
   | IfElse Expr [Stmt] [Stmt]
   | While Expr [Stmt]
+  | Word String
     deriving (Show, Eq)
 
 data KidProgram
