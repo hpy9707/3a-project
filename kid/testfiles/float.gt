@@ -1,0 +1,7 @@
+proc main()
+    float a;
+    float b;
+
+begin
+    c :=a+b;
+end

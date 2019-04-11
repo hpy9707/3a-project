@@ -44,7 +44,7 @@ myReserved
   = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write"]
 
 myOpnames 
-  = ["+", "-", "*", ":="]
+  = ["+", "-", "*", ":=", "[", "]", ","]
 
 -----------------------------------------------------------------
 --  pProg is the topmost parsing function. It looks for a program
@@ -68,7 +68,7 @@ pProg
 pProgBody :: Parser ([Decl],[Stmt])
 pProgBody
   = do
-      decls <- many pDecl
+      decls <- many (try pDecl2 <|> try pDecl1 <|> pDecl)
       reserved "begin"
       stmts <- many1 pStmt
       reserved "end"
@@ -81,14 +81,40 @@ pDecl
       ident <- identifier
       whiteSpace
       semi
-      return (Decl ident basetype)
+      return (Decl0 ident basetype)
+
+pDecl1 :: Parser Decl
+pDecl1
+  = do
+      basetype <- pBaseType
+      ident <- identifier
+      whiteSpace
+      n <- squares pNum  
+      semi
+      return (Decl1 ident basetype n)
+
+pDecl2 :: Parser Decl
+pDecl2
+  = do
+      basetype <- pBaseType
+      ident <- identifier
+      whiteSpace
+      reservedOp "["
+      n <- pNum
+      reservedOp ","
+      m <- pNum
+      reservedOp "]" 
+      semi
+      return (Decl2 ident basetype n m)
 
 pBaseType :: Parser BaseType
 pBaseType
   = do { reserved "bool"; return BoolType }
     <|>
     do { reserved "int"; return IntType }
-      
+    <|>
+    do { reserved "float"; return FloatType }
+ 
 -----------------------------------------------------------------
 --  pStmt is the main parser for statements. It wants to recognise
 --  read and write statements, and assignments.

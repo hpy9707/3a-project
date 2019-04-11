@@ -7,7 +7,7 @@ module KidAST where
 type Ident = String
  
 data BaseType 
-  = BoolType | IntType 
+  = BoolType | IntType | FloatType
     deriving (Show, Eq)
 
 data Lvalue 
@@ -36,7 +36,9 @@ data Expr
     deriving (Show, Eq)
 
 data Decl 
-  = Decl Ident BaseType
+  = Decl0 Ident BaseType
+  | Decl1 Ident BaseType Expr
+  | Decl2 Ident BaseType Expr Expr 
     deriving (Show, Eq)
 
 data Stmt 
