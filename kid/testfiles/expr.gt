@@ -1,0 +1,6 @@
+proc main()
+begin
+    b := a;
+    c := b[2];
+    d := c[3+2,6];
+end

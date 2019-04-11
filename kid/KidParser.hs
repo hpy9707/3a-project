@@ -41,10 +41,10 @@ reservedOp = Q.reservedOp lexer
 myReserved, myOpnames :: [String]
 
 myReserved
-  = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write"]
+  = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write","call"]
 
 myOpnames 
-  = ["+", "-", "*", ":="]
+  = ["+", "-", "*", ":=", "[", "]", ","]
 
 -----------------------------------------------------------------
 --  pProg is the topmost parsing function. It looks for a program
@@ -68,7 +68,7 @@ pProg
 pProgBody :: Parser ([Decl],[Stmt])
 pProgBody
   = do
-      decls <- many pDecl
+      decls <- many (try pDecl2 <|> try pDecl1 <|> pDecl)
       reserved "begin"
       stmts <- many1 pStmt
       reserved "end"
@@ -81,14 +81,40 @@ pDecl
       ident <- identifier
       whiteSpace
       semi
-      return (Decl ident basetype)
+      return (Decl0 ident basetype)
+
+pDecl1 :: Parser Decl
+pDecl1
+  = do
+      basetype <- pBaseType
+      ident <- identifier
+      whiteSpace
+      n <- squares pNum  
+      semi
+      return (Decl1 ident basetype n)
+
+pDecl2 :: Parser Decl
+pDecl2
+  = do
+      basetype <- pBaseType
+      ident <- identifier
+      whiteSpace
+      reservedOp "["
+      n <- pNum
+      reservedOp ","
+      m <- pNum
+      reservedOp "]" 
+      semi
+      return (Decl2 ident basetype n m)
 
 pBaseType :: Parser BaseType
 pBaseType
   = do { reserved "bool"; return BoolType }
     <|>
     do { reserved "int"; return IntType }
-      
+    <|>
+    do { reserved "float"; return FloatType }
+ 
 -----------------------------------------------------------------
 --  pStmt is the main parser for statements. It wants to recognise
 --  read and write statements, and assignments.
@@ -97,12 +123,13 @@ pBaseType
 pStmt, pRead, pWrite, pAsg :: Parser Stmt
 
 pStmt 
-  = choice [pRead, pWrite, pAsg]
+  = try pRead <|> try pWrite <|> try pAsg <|> try pCall <|> try pIf 
+  <|> try pIfElse <|> try pWhile
 
 pRead
   = do 
       reserved "read"
-      lvalue <- pLvalue
+      lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
       semi
       return (Read lvalue)
 
@@ -115,12 +142,52 @@ pWrite
 
 pAsg
   = do
-      lvalue <- pLvalue
+      lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue 
       reservedOp ":="
       rvalue <- pExp
       semi
       return (Assign lvalue rvalue)
 
+pCall
+  = do
+    reserved "call"
+    ident <- identifier
+    reservedOp "("
+    expList <- sepBy1 pExp comma
+    reservedOp ")" 
+    semi
+    return ( Call ident expList ) 
+
+pIf
+  = do
+  reserved "if"
+  n <- pExp
+  reserved "then"
+  stmts <- many1 pStmt
+  reserved "fi"
+  return ( If n stmts)
+
+pIfElse
+  = do
+    reserved "if"
+    n <- pExp
+    reserved "then"
+    stmts <- many1 pStmt
+    reserved "else" 
+    stmts1 <- many1 pStmt
+    reserved "fi"
+    return (IfElse n stmts stmts1)
+
+pWhile
+  = do
+    reserved "while"
+    n <- pExp
+    reserved "do"
+    stmts <- many1 pStmt
+    reserved "od"
+    return ( While n stmts)
+
+    
 -----------------------------------------------------------------
 --  pExp is the main parser for expressions. It takes into account
 --  the operator precedences and the fact that the binary operators
@@ -132,7 +199,7 @@ pAsg
 -- and associativity.
 -----------------------------------------------------------------
 
-pExp, pFactor, pNum, pIdent, pString :: Parser Expr
+pExp, pFactor, pNum, pIdentifier, pString :: Parser Expr
 
 pExp 
   = pString <|> (buildExpressionParser table pFactor)
@@ -140,7 +207,7 @@ pExp
     "expression"
 
 pFactor
-  = choice [parens pExp, pNum, pIdent]
+  = try pIdentifier <|> try (parens pExp) <|> try pNum
     <?> 
     "\"factor\""
 
@@ -177,18 +244,48 @@ pNum
     <?>
     "number"
 
-pIdent 
+pIdentifier
   = do
-      ident <- identifier
-      return (Id ident)
-    <?>
-    "identifier"
+    lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
+    return (Identifier lvalue)
+
+--pIdent 
+--  = do
+--      ident <- identifier
+ --     return (Id ident)
+--    <?>
+--    "identifier"
 
 pLvalue :: Parser Lvalue
 pLvalue
   = do
       ident <- identifier
       return (LId ident)
+    <?>
+    "lvalue"
+
+pLvalue1 :: Parser Lvalue
+pLvalue1
+  = do
+      ident <- identifier
+      whiteSpace
+      reservedOp "["
+      n <- pExp
+      reservedOp "]"
+      return (LId1 ident n)
+    <?>
+    "lvalue"
+pLvalue2 :: Parser Lvalue
+pLvalue2
+  = do
+      ident <- identifier
+      whiteSpace
+      reservedOp "["
+      n <- pExp
+      reservedOp ","
+      m <- pExp
+      reservedOp "]"
+      return (LId2 ident n m)
     <?>
     "lvalue"
       
