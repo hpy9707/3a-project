@@ -68,14 +68,20 @@ pProg
 pProgBody :: Parser ([Decl],[Stmt])
 pProgBody
   = do
-      decls <- many (try pDecl2 <|> try pDecl1 <|> pDecl)
+      decls <- many pDecl
       reserved "begin"
       stmts <- many1 pStmt
       reserved "end"
       return (decls,stmts)
 
-pDecl :: Parser Decl
+pDecl, pDecl0, pDecl1, pDecl2 :: Parser Decl
+
 pDecl
+  = do
+      d <- (try pDecl2 <|> try pDecl1 <|> pDecl0)
+      return d
+
+pDecl0
   = do
       basetype <- pBaseType
       ident <- identifier
@@ -83,7 +89,6 @@ pDecl
       semi
       return (Decl0 ident basetype)
 
-pDecl1 :: Parser Decl
 pDecl1
   = do
       basetype <- pBaseType
@@ -93,7 +98,6 @@ pDecl1
       semi
       return (Decl1 ident basetype n)
 
-pDecl2 :: Parser Decl
 pDecl2
   = do
       basetype <- pBaseType
@@ -129,7 +133,7 @@ pStmt
 pRead
   = do 
       reserved "read"
-      lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
+      lvalue <- pLvalue
       semi
       return (Read lvalue)
 
@@ -142,7 +146,7 @@ pWrite
 
 pAsg
   = do
-      lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue 
+      lvalue <- pLvalue
       reservedOp ":="
       rvalue <- pExp
       semi
@@ -199,7 +203,7 @@ pWhile
 -- and associativity.
 -----------------------------------------------------------------
 
-pExp, pFactor, pNum, pIdentifier, pString :: Parser Expr
+pExp, pFactor, pNum, pLValExpr, pString :: Parser Expr
 
 pExp 
   = pString <|> (buildExpressionParser table pFactor)
@@ -207,7 +211,7 @@ pExp
     "expression"
 
 pFactor
-  = try pIdentifier <|> try (parens pExp) <|> try pNum
+  = try pLValExpr <|> try (parens pExp) <|> try pNum
     <?> 
     "\"factor\""
 
@@ -244,27 +248,34 @@ pNum
     <?>
     "number"
 
-pIdentifier
+pLValExpr
   = do
     lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
-    return (Identifier lvalue)
+    return (LValExpr lvalue)
 
---pIdent 
---  = do
---      ident <- identifier
- --     return (Id ident)
---    <?>
---    "identifier"
+-----------------------------------------------------------------
+-- pLValue
+-- represents one of the following:
+-- <id>
+-- <id> [ expr ]
+-- <id> [ expr ]
+-- can be used in an expression or on the LHS of a read or assignment.
+-----------------------------------------------------------------
 
-pLvalue :: Parser Lvalue
+pLvalue, pLvalue0, pLvalue1, pLvalue2 :: Parser Lvalue
+
 pLvalue
+  = do
+      val <- try pLvalue2 <|> try pLvalue1 <|> pLvalue0
+      return val
+
+pLvalue0
   = do
       ident <- identifier
       return (LId ident)
     <?>
     "lvalue"
 
-pLvalue1 :: Parser Lvalue
 pLvalue1
   = do
       ident <- identifier
@@ -275,7 +286,7 @@ pLvalue1
       return (LId1 ident n)
     <?>
     "lvalue"
-pLvalue2 :: Parser Lvalue
+
 pLvalue2
   = do
       ident <- identifier

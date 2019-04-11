@@ -3,7 +3,6 @@ proc main()
     int b;
     int c;
 begin
-    
     read a;
     read b[2];
     read c[3+2,6];

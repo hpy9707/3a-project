@@ -12,9 +12,8 @@ showProgram (Program decls stmts)
  -- TODO: make sure declarations are limited to bool, float, int
 
 showDecl :: Decl -> String
-showDecl (Decl id baseType) = tab ++ (showBaseType baseType) 
+showDecl (Decl0 id baseType) = tab ++ (showBaseType baseType) 
     ++ " " ++ id ++ ";"
--- TODO: change Decl above to Decl0
 --showDecl (Decl1 id baseType int) = tab ++ (showBaseType baseType) ++ 
 --" " ++ id ++ "[" ++ (show int) ++ "]" ++ ";"
 --showDecl (Decl2 id baseType int1 int2) = tab ++  (showBaseType baseType) ++ 
@@ -48,7 +47,6 @@ showLvalue (LId id) = id
 showExpr :: Expr -> String
 showExpr (BoolConst b) = show b
 showExpr (IntConst i) = show i
-<<<<<<< HEAD
 showExpr (StrConst s) = s
 -- TODO: add and test FloatConst
 --showExpr (Id id) = id
