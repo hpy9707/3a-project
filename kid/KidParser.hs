@@ -186,6 +186,8 @@ pWhile
     stmts <- many1 pStmt
     reserved "od"
     return ( While n stmts)
+
+    
 -----------------------------------------------------------------
 --  pExp is the main parser for expressions. It takes into account
 --  the operator precedences and the fact that the binary operators
@@ -197,7 +199,7 @@ pWhile
 -- and associativity.
 -----------------------------------------------------------------
 
-pExp, pFactor, pNum, pIdent, pString :: Parser Expr
+pExp, pFactor, pNum, pIdentifier, pString :: Parser Expr
 
 pExp 
   = pString <|> (buildExpressionParser table pFactor)
@@ -205,7 +207,7 @@ pExp
     "expression"
 
 pFactor
-  = choice [parens pExp, pNum, pIdent]
+  = try pIdentifier <|> try (parens pExp) <|> try pNum
     <?> 
     "\"factor\""
 
@@ -242,12 +244,17 @@ pNum
     <?>
     "number"
 
-pIdent 
+pIdentifier
   = do
-      ident <- identifier
-      return (Id ident)
-    <?>
-    "identifier"
+    lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
+    return (Identifier lvalue)
+
+--pIdent 
+--  = do
+--      ident <- identifier
+ --     return (Id ident)
+--    <?>
+--    "identifier"
 
 pLvalue :: Parser Lvalue
 pLvalue

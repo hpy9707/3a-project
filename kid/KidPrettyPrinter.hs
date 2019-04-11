@@ -19,7 +19,7 @@ showLvalue (LId id) = id
 
 showExpr :: Expr -> String
 showExpr (IntConst i) = show i
-showExpr (Id id) = id
+--showExpr (Id id) = id
 showExpr (Add a b) = (showExpr2 a) ++ " + " ++ (showExpr2 b)
 showExpr (Sub a b) = (showExpr2 a) ++ " - " ++ (showExpr2 b)
 showExpr (Mul a b) = (showExpr2 a) ++ " * " ++ (showExpr2 b)

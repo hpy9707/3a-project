@@ -20,7 +20,7 @@ data Expr
   = BoolConst Bool
   | IntConst Int
   | StrConst String
-  | Id Ident
+  | Identifier Lvalue
   | Negation Expr
   | UnaryMinus Expr
   | Eq Expr Expr
