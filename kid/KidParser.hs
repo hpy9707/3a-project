@@ -39,7 +39,7 @@ reserved   = Q.reserved lexer
 reservedOp = Q.reservedOp lexer
 
 myReserved, myOpnames :: [String]
-
+-- Andy's new work: adding some words into table
 myReserved
   = ["begin", "bool", "end", "false", "int", "proc", "read", "true", "write","else","float","String","do","fi","if","od","ref","then","val","while"]
 
@@ -73,7 +73,7 @@ pProgBody
       stmts <- many1 pStmt
       reserved "end"
       return (decls,stmts)
-
+--Andy's work:  add the indicator type and add the float type into list
 pDecl :: Parser Decl
 pDecl
   = do
@@ -100,17 +100,54 @@ pBaseType
     <|>
     do { reserved "string"; return StringType } 
 
-      
+pSetBool :: Parser BaseType  
+pSetBool= do { reserved "bool"; return BoolType }
+
+pSetFloat :: Parser BaseType  
+pSetFloat= do { reserved "float"; return FloatType }
+
+pSetInt :: Parser BaseType  
+pSetInt= do { reserved "int"; return IntType }
+
 -----------------------------------------------------------------
 --  pStmt is the main parser for statements. It wants to recognise
 --  read and write statements, and assignments.
 -----------------------------------------------------------------
 
-pStmt, pRead, pWrite, pAsg :: Parser Stmt
+pStmt,pDeclVal, pRead, pWrite, pAsg :: Parser Stmt
 
 pStmt 
-  = choice [pRead, pWrite, pAsg]
-
+  = choice [pDeclVal,pRead, pWrite, pAsg]
+--Andy's work: declare a vaiable with assginment and declare a variable without a assinment
+pDeclVal
+  = do --if can declare variable with asssignment
+      tvalue <- pBaseType
+      lvalue <- pLvalue
+      reservedOp ":="
+      rvalue <- pExp
+      semi
+      return (DeclVal tvalue lvalue rvalue)
+     <|>
+    do  --if not and the declaration is bool
+      tvalue <- pSetBool
+      lvalue <- pLvalue
+      rvalue <- defaultBool
+      semi
+      return (DeclVal tvalue lvalue rvalue)
+      <|>
+    do  --if not and the declaration is int
+        tvalue <- pSetInt
+        lvalue <- pLvalue
+        rvalue <- defaultInt
+        semi
+        return (DeclVal tvalue lvalue rvalue)
+    <|>
+    do  --if not and the declaration is float
+        tvalue <- pSetFloat
+        lvalue <- pLvalue
+        rvalue <- defaultFloat
+        semi
+        return (DeclVal tvalue lvalue rvalue) 
 pRead
   = do 
       reserved "read"
@@ -144,7 +181,7 @@ pAsg
 -- and associativity.
 -----------------------------------------------------------------
 
-pExp, pFactor, pNum, pIdent, pString pFloat:: Parser Expr
+pExp, pFactor, pInt, pIdent, pString, pFloat, defaultBool, defaultInt, defaultFloat:: Parser Expr
 
 pExp 
   = pString <|> (buildExpressionParser table pFactor)
@@ -152,7 +189,7 @@ pExp
     "expression"
 
 pFactor
-  = choice [parens pExp, pNum, pIdent]
+  = choice [parens pExp, pInt, pIdent,pFloat]
     <?> 
     "\"factor\""
 
@@ -172,6 +209,16 @@ binary name op
   = Infix (do { reservedOp name; return op }) AssocLeft
 relation name rel
   = Infix (do { reservedOp name; return rel }) AssocNone
+  
+-- These three below is the helper function to build the default assignment
+defaultBool
+   = do return (BoolConst False) 
+
+defaultInt
+   = do return(IntConst 0)
+
+defaultFloat
+    = do return(FloatConst 0)
 
 pString 
   = do
@@ -181,13 +228,14 @@ pString
       return (StrConst str)
     <?>
     "string"
-
-pNum
+--adapt the pNum into Int
+pInt
   = do
       n <- natural <?> ""
       return (IntConst (fromInteger n :: Int))
     <?>
-    "number"
+    "integar"
+ --add float to the list   
 pFloat 
     = lexeme (try
                (do { ws <- many1 digit
@@ -204,6 +252,8 @@ pFloat
                    }
                )
             )
+            <?>
+      "float"
 pIdent 
   = do
       ident <- identifier

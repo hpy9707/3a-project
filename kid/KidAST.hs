@@ -41,11 +41,12 @@ data Expr
     deriving (Show, Eq)
 
 data Decl 
-  = Decl Ident BaseType
+  = Decl IndiType BaseType Ident
     deriving (Show, Eq)
 
 data Stmt 
-  = Assign Lvalue Expr
+  = DeclVal BaseType Lvalue Expr 
+  | Assign Lvalue Expr
   | Read Lvalue
   | Write Expr
   | Call Ident [Expr]
