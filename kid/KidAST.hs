@@ -48,14 +48,17 @@ data Stmt
   = Assign Lvalue Expr
   | Read Lvalue
   | Write Expr
-  | Call String [Expr]
+  | Call Ident [Expr]
   | If Expr [Stmt]
   | IfElse Expr [Stmt] [Stmt]
   | While Expr [Stmt]
   | Word String
     deriving (Show, Eq)
 
-data KidProgram
-  = Program [Decl] [Stmt]
+data Function
+  = Function Ident [Decl] [Stmt]
     deriving (Show, Eq)
+
+data KidProgram = KidProgram [Function]
+  deriving (Show, Eq)
 

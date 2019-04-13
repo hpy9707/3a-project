@@ -54,11 +54,17 @@ myOpnames
 pProg :: Parser KidProgram
 pProg
   = do
+    funcs <- many1 pFunc
+    return (KidProgram funcs)
+
+pFunc :: Parser Function
+pFunc
+  = do
       reserved "proc"
-      reserved "main"
+      name <- identifier
       parens (return ())
       (decls,stmts) <- pProgBody
-      return (Program decls stmts)
+      return (Function name decls stmts)
       <?>
       "program"
       
@@ -200,11 +206,11 @@ pIfElse
     reserved "if"
     n <- pExp
     reserved "then"
-    stmts <- many1 pStmt
-    reserved "else" 
     stmts1 <- many1 pStmt
+    reserved "else" 
+    stmts2 <- many1 pStmt
     reserved "fi"
-    return (IfElse n stmts stmts1)
+    return (IfElse n stmts1 stmts2)
     <?>
     "if else"
 

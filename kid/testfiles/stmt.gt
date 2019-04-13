@@ -1,7 +1,0 @@
-proc main()
-begin
-    a  :=0;
-    read x  ;
-    write 3+4;
-    call p(n);
-end

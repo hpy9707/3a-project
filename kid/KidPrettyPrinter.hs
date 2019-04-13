@@ -6,24 +6,27 @@ import Data.List
 tab = "    "
 
 showProgram :: KidProgram -> String
-showProgram (Program decls stmts)
- = "proc\n" ++ (intercalate "\n" (map showDecl decls)) ++ "\nbegin\n" ++
-    (intercalate "\n" (map (showStmt 1) stmts)) ++ "\nend\n"
+showProgram (KidProgram funcs) = intercalate "\n" (map showFunc funcs)
+
+showFunc :: Function -> String
+showFunc (Function name decls stmts)
+ = "proc " ++ name ++ "()" ++ "\n" ++ (concat (map showDecl decls)) ++ "begin\n" ++ (intercalate "\n" (map (showStmt 1) stmts)) ++ "\nend\n"
+ -- TODO: deal with program arguments
  -- TODO: make sure declarations are limited to bool, float, int
 
 showDecl :: Decl -> String
 showDecl (Decl0 id baseType) = tab ++ (showBaseType baseType) 
-    ++ " " ++ id ++ ";"
---showDecl (Decl1 id baseType int) = tab ++ (showBaseType baseType) ++ 
---" " ++ id ++ "[" ++ (show int) ++ "]" ++ ";"
---showDecl (Decl2 id baseType int1 int2) = tab ++  (showBaseType baseType) ++ 
---" " ++ id ++ "[" ++ (show int1) ++ "," ++ (show int2) ++ "]" ++ ";"
+    ++ " " ++ id ++ ";\n"
+showDecl (Decl1 id baseType int) = tab ++ (showBaseType baseType) ++ 
+    " " ++ id ++ "[" ++ (showExpr int) ++ "]" ++ ";\n"
+showDecl (Decl2 id baseType int1 int2) = tab ++  (showBaseType baseType) ++ 
+    " " ++ id ++ "[" ++ (showExpr int1) ++ ", " ++ (showExpr int2) ++ "]" ++ ";\n"
 
 showBaseType :: BaseType -> String
 showBaseType BoolType = "bool"
 showBaseType IntType = "int"
--- showBaseType FloatType = "float"
--- TODO: add floattype
+showBaseType FloatType = "float"
+-- TODO: add floattype in KidParser.hs
 
 -- statements pass around an Int variable representing the number of tabs
 showStmt :: Int -> Stmt -> String
@@ -33,23 +36,32 @@ showStmt2 :: Int -> Stmt -> String
 showStmt2 t (Assign lvalue expr) = (showLvalue lvalue) ++ " := " ++ (showExpr expr) ++ ";"
 showStmt2 t (Read lvalue) = "read " ++ (showLvalue lvalue) ++ ";"
 showStmt2 t (Write expr) = "write " ++ (showExpr expr) ++ ";"
---showStmt2 t (Call id [args]) = "call " ++ (showId id) ++ "(" ++ (intercalate "," (map showExpr args)) ++ ";"
---showStmt2 t (If expr stmts) = "if " ++ (showExpr expr) ++ " then\n" ++ (intercalate "\n" (map showStmt (t + 1) stmts)) ++ "\n" ++ (showStmt (t - 1) (Word "fi"))
---showStmt2 t (IfElse expr stmts1 stmts2) = "if " ++ (showExpr expr) ++ " then\n" ++ (intercalate "\n" (map showStmt (t + 1) stmts1)) ++ (showStmt (t - 1) (Word "else")) ++ (intercalate "\n" (map showStmt (t + 1) stmts2))) ++ "\n" ++ (showStmt (t - 1) (Word "fi"))
---showStmt2 t (While expr stmts) = "while " ++ (showExpr expr) ++ " do\n" ++ (intercalate "\n" (map showStmt (t + 1) stmts))) ++ "\n" ++ (showStmt (t - 1) (Word "od"))
---showStmt2 t (Word str) = str
+showStmt2 t (Call id args) = "call " ++ id ++ "(" ++ 
+    (intercalate ", " (map showExpr args)) ++ ");"
+showStmt2 t (If expr stmts) = "if " ++ (showExpr expr) ++ " then\n" ++ 
+    (intercalate "\n" (map (showStmt (t + 1)) stmts)) ++ "\n" ++
+    (showStmt t (Word "fi"))
+showStmt2 t (IfElse expr stmts1 stmts2) = "if " ++ (showExpr expr) ++ 
+    " then\n" ++ (intercalate "\n" (map (showStmt (t + 1)) stmts1)) ++ 
+    "\n" ++ (showStmt t (Word "else")) ++ "\n" ++ 
+    (intercalate "\n" (map (showStmt (t + 1)) stmts2)) ++ "\n" ++ 
+    (showStmt t (Word "fi"))
+showStmt2 t (While expr stmts) = "while " ++ (showExpr expr) ++ " do\n" ++ 
+    (intercalate "\n" (map (showStmt (t + 1)) stmts)) ++ "\n" ++ 
+    (showStmt t (Word "od"))
+showStmt2 t (Word str) = str
 
 showLvalue :: Lvalue -> String
 showLvalue (LId id) = id
---showLvalue (LId1 id expr) = id ++ "[" ++ expr ++ "]"
---showLvalue (LId2 id expr1 expr2) = id ++ "[" ++ expr1 ++ "," ++ expr2 ++ "]"
+showLvalue (LId1 id expr) = id ++ "[" ++ (showExpr expr) ++ "]"
+showLvalue (LId2 id expr1 expr2) = id ++ "[" ++ (showExpr expr1) ++ ", " ++ (showExpr expr2) ++ "]"
 
 showExpr :: Expr -> String
 showExpr (BoolConst b) = show b
 showExpr (IntConst i) = show i
 showExpr (StrConst s) = s
 -- TODO: add and test FloatConst
---showExpr (Id id) = id
+showExpr (LValExpr lval) = showLvalue lval
 showExpr (Negation expr) = "!" ++ (showExpr2 expr)
 showExpr (UnaryMinus expr) = "-" ++ (showExpr2 expr)
 showExpr (Add a b) = (showExpr2 a) ++ " + " ++ (showExpr2 b)
