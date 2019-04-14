@@ -1,7 +1,16 @@
+{-
+
+Team name: 3A team
+Austin Lancaster 539708
+Angelica Adorno 1059183
+Peiyu Huang 1038665
+
+-}
+
 module Main where
 
-import KidAST
-import KidPrettyPrinter
+import GoatAST
+import GoatPrettyPrinter
 import Data.Char
 import Text.Parsec
 import Text.Parsec.Expr
@@ -62,9 +71,11 @@ pFunc
   = do
       reserved "proc"
       name <- identifier
-      parens (return ())
+      reservedOp "("
+      params <- sepBy pParameter comma
+      reservedOp ")"
       (decls,stmts) <- pProgBody
-      return (Function name decls stmts)
+      return (Function name params decls stmts)
       <?>
       "program"
       
@@ -83,6 +94,20 @@ pProgBody
     return (decls,stmts)
     <?>
     "program body"
+
+pParameter :: Parser Param
+pParameter
+  = do
+      indicator<-pIndiType
+      basetype <- pBaseType
+      ident <- identifier
+      return (Param ident indicator basetype)
+
+pIndiType :: Parser IndiType
+pIndiType    
+  = do {reserved "val" ; return ValueType}
+  <|>
+    do {reserved "ref" ; return ReferType}
 
 pDecl, pDecl0, pDecl1, pDecl2 :: Parser Decl
 
@@ -246,7 +271,7 @@ pExp
     "expression"
 
 pFactor
-  = try pLValExpr <|> try (parens pExp) <|> try pNum <|> try pBool
+  = try pLValExpr <|> try (parens pExp) <|> try pFloat <|> try pNum <|> try pBool
     <?> 
     "\"factor\""
 
@@ -283,6 +308,16 @@ pNum
     <?>
     "number"
 
+pFloat = do
+    ws <- many1 digit
+    char '.'
+    ds <- many1 digit 
+    whiteSpace
+    let val = read (ws ++ ('.' : ds)) :: Float
+    return (FloatConst val)
+    <?>
+    "float"
+
 pBool
   = do
     bool <- pTrue <|> pFalse
@@ -306,7 +341,7 @@ pFalse
 
 pLValExpr
   = do
-    lvalue <- try pLvalue2 <|> try pLvalue1 <|> pLvalue
+    lvalue <- pLvalue
     return (LValExpr lvalue)
     <?>
     "LValExpr"

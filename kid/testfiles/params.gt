@@ -1,0 +1,7 @@
+proc q (val float x, ref int k)
+    int n;
+float y;
+    bool a[8];
+begin
+a[7] := true;
+k := 42; end

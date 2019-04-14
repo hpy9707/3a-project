@@ -1,0 +1,6 @@
+proc main()
+begin
+    while (True) do
+        call p(n, 1+3, "the");
+    od
+end

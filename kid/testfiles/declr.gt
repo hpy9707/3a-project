@@ -1,0 +1,8 @@
+proc main()
+    bool c;
+    float a[1];
+    int b[2,3];
+
+begin
+    c :=a+b;
+end

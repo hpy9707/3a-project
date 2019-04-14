@@ -1,4 +1,13 @@
-module KidAST where
+{-
+
+Team name: 3A team
+Austin Lancaster 539708
+Angelica Adorno 1059183
+Peiyu Huang 1038665
+
+-}
+
+module GoatAST where
 
 -----------------------------------
 -- Specification of an AST for Goat 
@@ -6,6 +15,10 @@ module KidAST where
 
 type Ident = String
  
+data IndiType
+  = ValueType | ReferType
+    deriving (Show,Eq)
+
 data BaseType 
   = BoolType | IntType | FloatType
     deriving (Show, Eq)
@@ -20,7 +33,7 @@ data Expr
   = BoolConst Bool
   | IntConst Int
   | StrConst String
-  -- TODO: add FloatConst
+  | FloatConst Float
   | LValExpr Lvalue
   | Negation Expr
   | UnaryMinus Expr
@@ -36,6 +49,10 @@ data Expr
   | Div Expr Expr
   | Conj Expr Expr
   | Disj Expr Expr
+    deriving (Show, Eq)
+
+data Param
+  = Param Ident IndiType BaseType
     deriving (Show, Eq)
 
 data Decl 
@@ -56,7 +73,7 @@ data Stmt
     deriving (Show, Eq)
 
 data Function
-  = Function Ident [Decl] [Stmt]
+  = Function Ident [Param] [Decl] [Stmt]
     deriving (Show, Eq)
 
 data KidProgram = KidProgram [Function]

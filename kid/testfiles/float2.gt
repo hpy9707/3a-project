@@ -1,0 +1,4 @@
+proc main()
+begin
+    b := 4.0 * 1.2 * 3.1;
+end

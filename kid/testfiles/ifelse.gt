@@ -1,0 +1,4 @@
+proc main()
+begin
+    if (a < 3) then a := 1; else a:=2; fi
+end

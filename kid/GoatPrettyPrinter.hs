@@ -1,6 +1,15 @@
-module KidPrettyPrinter where
+{-
 
-import KidAST
+Team name: 3A team
+Austin Lancaster 539708
+Angelica Adorno 1059183
+Peiyu Huang 1038665
+
+-}
+
+module GoatPrettyPrinter where
+
+import GoatAST
 import Data.List
 
 tab = "    "
@@ -9,10 +18,18 @@ showProgram :: KidProgram -> String
 showProgram (KidProgram funcs) = intercalate "\n" (map showFunc funcs)
 
 showFunc :: Function -> String
-showFunc (Function name decls stmts)
- = "proc " ++ name ++ "()" ++ "\n" ++ (concat (map showDecl decls)) ++ "begin\n" ++ (intercalate "\n" (map (showStmt 1) stmts)) ++ "\nend\n"
- -- TODO: deal with program arguments
- -- TODO: make sure declarations are limited to bool, float, int
+showFunc (Function name params decls stmts)
+    = "proc " ++ name ++ "(" ++ (intercalate ", " (map showParam params)) ++
+    ")\n" ++ (concat (map showDecl decls)) ++ "begin\n" ++ 
+    (intercalate "\n" (map (showStmt 1) stmts)) ++ "\nend\n"
+
+showParam :: Param -> String
+showParam (Param id indiType baseType) = (showIndicator indiType) ++ " " ++
+    (showBaseType baseType) ++ " " ++ id
+
+showIndicator :: IndiType -> String
+showIndicator ValueType = "val"
+showIndicator ReferType = "ref"
 
 showDecl :: Decl -> String
 showDecl (Decl0 id baseType) = tab ++ (showBaseType baseType) 
@@ -26,7 +43,6 @@ showBaseType :: BaseType -> String
 showBaseType BoolType = "bool"
 showBaseType IntType = "int"
 showBaseType FloatType = "float"
--- TODO: add floattype in KidParser.hs
 
 -- statements pass around an Int variable representing the number of tabs
 showStmt :: Int -> Stmt -> String
@@ -59,8 +75,8 @@ showLvalue (LId2 id expr1 expr2) = id ++ "[" ++ (showExpr expr1) ++ ", " ++ (sho
 showExpr :: Expr -> String
 showExpr (BoolConst b) = show b
 showExpr (IntConst i) = show i
-showExpr (StrConst s) = s
--- TODO: add and test FloatConst
+showExpr (StrConst s) = "\"" ++ s ++ "\""
+showExpr (FloatConst f) = show f
 showExpr (LValExpr lval) = showLvalue lval
 showExpr (Negation expr) = "!" ++ (showExpr2 expr)
 showExpr (UnaryMinus expr) = "-" ++ (showExpr2 expr)

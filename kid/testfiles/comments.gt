@@ -1,0 +1,10 @@
+# comment
+proc main()
+    int a; # blah
+    # second comment
+begin
+    a := 2 * (1 + 10) + 2 + 2 * 2 - 14;
+    write a; # yes
+    #the
+end
+# blah
