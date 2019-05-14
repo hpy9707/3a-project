@@ -1,0 +1,11 @@
+*.hi
+*.o
+KidParser
+.DS_Store
+Goat
+GoatParser
+kid_part1/
+Analyze
+Analyze.hs
+SymTable.hs
+Codegen.hs
