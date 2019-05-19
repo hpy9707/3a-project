@@ -152,7 +152,27 @@ compileProcedure :: Procedure -> Update ()
 compileProcedure (Procedure pos id args decls stmts) = do
     putLabelWithName ("proc_" ++ id ++ ":")
     putCode ["push_stack_frame" ++ (show ((length args) + (length decls)))]
+    compileDeclList decls
     compileStmtList stmts
+
+--compile a list of delcartions 
+compileDeclList ::[Decl] -> Update()
+compileDeclList (x:decls)=do
+    compileDecl x
+    compileDeclList decls
+compileDeclList [] = Update (\st -> ((), st))
+
+--compile one declaration
+compileDecl :: Decl -> Update()
+compileDecl (Decl pos id goattype)= do
+    putVariable id goattype
+    compilegoattype goattype
+
+--this should be done: search the slotnumber by a specific id 
+-- create relative space for array/matrix? 
+ --compileGoatType:: GoatType -> Update()
+
+
 
 -- compile a list of statments
 compileStmtList :: [Stmt] -> Update ()
@@ -174,6 +194,21 @@ compileStmt (Write pos expr) = do
     -- its argument from
     putCode ["move", "r0", reg]
     putCode ["call_builtin", func]
+
+ -- question? how to get the slotnumber of variable and the logic of array/ matrix
+-- compileLvalue ::Lvalue->Update(Slotnumber,BaseType)
+-- compileLvalue lvalue= do
+
+compileStmt (Read pos lvalue)= do
+    (slotnum,basetype) <- compileLvalue lvalue
+    func,_ case basetype of 
+        BoolType-> return "read_bool" 
+        IntType -> return "read_int"
+        FloatType -> return "read_real"
+        StringType -> return "read_string"
+    putcode ["call_builtin",func]
+    putcode ["store",slotnum,"r0"]
+
 
 -- Compile an expression and return its register number and type
 compileExpr :: Expr -> Update (String, BaseType)
