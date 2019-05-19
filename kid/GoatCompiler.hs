@@ -209,6 +209,33 @@ compileStmt (Read pos lvalue)= do
     putcode ["call_builtin",func]
     putcode ["store",slotnum,"r0"]
 
+    --question: how to get the current label number? 
+compileStmt(If pos expr stmt) = do 
+    compileExpr expr
+    putCode["branch_on true","r0,",labelname]
+    putLabelNext
+    compileStmtList stmt
+    putCode["branch_uncond",labelname]
+    putLabelNext
+
+compileStmt(IfElse pos expr stmt1 stmt2)=do
+    compileExpr expr
+    putLabelNext
+    putCode["branch_on ture","r0,",labelname]
+    compileStmtList stmt1
+    putLabelNext
+    putCode["branch_on false","r0",labelname]
+    compileStmtList stmt2
+    putlabelNext
+    putCode["branch_uncond",labelname]
+
+compileStmt(While pos expr stmt)=do
+    compileExpr expr
+    putCode["branch_on true","r0,",labelname]
+    putLabelNext
+    compileStmtList stmt
+    putCode["branch_uncond",labelname]
+    putLabelNext
 
 -- Compile an expression and return its register number and type
 compileExpr :: Expr -> Update (String, BaseType)
