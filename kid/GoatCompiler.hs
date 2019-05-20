@@ -22,11 +22,13 @@ data State = State
     -- dictionary to store procedures {id: [argtypes]}
       procedures :: Map.Map String [BaseType],
     -- dictionary to store variables {id: (slotnumber, type)}
-      variables :: Map.Map String GoatType,
+      variables :: Map.Map String (Int, GoatType),
     -- register counter
       regCount :: Int,
     -- label counter
-      labelCount :: Int
+      labelCount :: Int,
+    -- slot counter
+      slotCount :: Int
     }
 
 -- data, instances and functions relating to the state monad
@@ -97,12 +99,22 @@ putProcedure id args = Update (\st ->
         ((), st { procedures = newMap }))
 
 -- XXX call this function to add a variable to the current environment
-putVariable :: String -> GoatType -> Update ()
-putVariable id t = Update (\st ->
+putVariable :: String -> Int -> GoatType -> Update ()
+putVariable id slotnumber t = Update (\st ->
     let newMap = if Map.member id (variables st)
             then error $ "multiple declarations for " ++ id
-            else Map.insert id t (variables st) in
+            else Map.insert id (slotnumber, t) (variables st) in
         ((), st { variables = newMap }))
+
+-- call this function to get a variable's slot number and type
+getVariable :: String -> Update (Int, GoatType)
+getVariable id = do
+    st <- getState
+    map <- return (variables st)
+    val <- return (Map.lookup id map)
+    case val of
+        (Just (i, t)) -> return (i, t)
+        Nothing -> error $ "variable " ++ id ++ " is referenced without declaration"
 
 incrementRegister :: Update ()
 incrementRegister = Update (\st ->
@@ -117,6 +129,26 @@ allocateRegister = do
     incrementRegister
     return ("r" ++ (show r))
 
+-- increment slotCount by 1
+incrementSlot :: Update ()
+incrementSlot = Update (\st ->
+    let l = (slotCount st) in
+    ((), st { slotCount = l + 1 }))
+
+-- get the next slot number and increment
+getSlotNext :: Update Int
+getSlotNext = do
+    st <- getState
+    s <- return $ slotCount st
+    incrementSlot
+    return s
+
+getSlotCurrent :: Update Int
+getSlotCurrent = do
+    st <- getState
+    s <- return $ slotCount st
+    return s
+
 -- compile the program and return a string of the Oz code compiled from a Goat program.
 -- TODO: handle more than one procedure
 compileProgram :: Program -> String
@@ -127,7 +159,8 @@ compileProgram (Program procs) =
             procedures = Map.empty,
             variables = Map.empty,
             labelCount = 0,
-            regCount = 0
+            regCount = 0,
+            slotCount = 0
             }
         gen =  do
             putCode ["call", "proc_main"]
