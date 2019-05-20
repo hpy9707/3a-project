@@ -1,0 +1,4 @@
+proc main()
+begin
+    write 36.98;
+end

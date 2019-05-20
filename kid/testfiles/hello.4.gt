@@ -1,0 +1,4 @@
+proc main()
+begin
+    write false!=3;
+end

@@ -15,6 +15,8 @@ import qualified Data.Map as Map
 import Control.Monad
 import Data.List (intersperse)
 
+data ExprVal = IntExpr Int | BoolExpr Bool | StringExpr String | FloatExpr Float
+    deriving(Eq)
 -- state used for compilation of the program
 data State = State
     -- string to store generated code
@@ -164,7 +166,7 @@ compileStmtList [] = Update (\st -> ((), st))
 -- compile a statement
 compileStmt :: Stmt -> Update ()
 compileStmt (Write pos expr) = do
-    (reg, baseType) <- compileExpr expr
+    (reg, baseType, _) <- compileExpr expr
     func <- case baseType of
         BoolType -> return "print_bool"
         IntType -> return "print_int"
@@ -176,9 +178,87 @@ compileStmt (Write pos expr) = do
     putCode ["call_builtin", func]
 
 -- Compile an expression and return its register number and type
-compileExpr :: Expr -> Update (String, BaseType)
+compileExpr :: Expr -> Update (String, BaseType, ExprVal)
 compileExpr (StrCon pos val) = do
     reg <- allocateRegister
     putCode ["string_const", reg, "\"" ++ val ++ "\""]
-
-    return (reg, StringType)
+    return (reg, StringType, (StringExpr val))
+compileExpr (IntCon pos val) = do
+    reg <- allocateRegister
+    putCode ["int_const", reg, (show val)]
+    return (reg, IntType, (IntExpr val))
+compileExpr (FloatCon pos val) = do
+    reg <- allocateRegister
+    putCode ["real_const", reg, (show val)]
+    return (reg, FloatType, (FloatExpr val))
+compileExpr (BoolCon pos val) = do
+    reg <- allocateRegister
+    bool <- case val of
+        True -> return 1
+        False -> return 0
+    putCode ["int_const", reg, (show bool)]
+    return (reg, BoolType, (BoolExpr val))
+compileExpr (And pos expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty, vl) <- compileExpr expr
+    if ty /= BoolType 
+        then error $ "Logical operator arguments must have type bool"
+        else if vl == BoolExpr False
+            then return (reg, BoolType, BoolExpr False)
+            else do
+                (rg1, ty1, vl1) <- compileExpr expr1 
+                if ty1 /= BoolType
+                    then error $ "Logical operator arguments must have type bool"
+                    else do 
+                        vlbool <- case vl of
+                            BoolExpr b -> return b
+                        vlbool1 <- case vl1 of
+                            BoolExpr b -> return b
+                        putCode ["and", reg, rg, rg1]
+                        return (reg, BoolType, BoolExpr (vlbool && vlbool1))
+compileExpr (Or pos expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty, vl) <- compileExpr expr
+    if ty /= BoolType 
+        then error $ "Logical operator arguments must have type bool"
+        else if vl == BoolExpr True
+            then return (reg, BoolType, BoolExpr True)
+            else do
+                (rg1, ty1, vl1) <- compileExpr expr1 
+                if ty1 /= BoolType
+                    then error $ "Logical operator arguments must have type bool"
+                    else do 
+                        vlbool <- case vl of
+                            BoolExpr b -> return b
+                        vlbool1 <- case vl1 of
+                            BoolExpr b -> return b
+                        putCode ["or", reg, rg, rg1]
+                        return (reg, BoolType, BoolExpr (vlbool || vlbool1))
+compileExpr (Not pos expr) = do
+    reg <- allocateRegister
+    (rg, ty, vl) <- compileExpr expr
+    if ty /= BoolType
+        then error $ "Logical operator arguments must have type bool"
+        else do
+            putCode ["not", reg, rg]
+            return (reg, BoolType, vl)
+compileExpr (Rel pos relop expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty, vl) <- compileExpr expr
+    (rg1, ty1, vl1) <- compileExpr expr1
+    if ty /= ty1
+        then error $ "Equal arguments must have the same type"
+        else do 
+            f1 <- case relop of
+                Op_eq -> return "comp_eq_"
+                Op_ne -> return "comp_ne_"
+                Op_ge -> return "comp_ge_"
+                Op_le -> return "comp_le_"
+                Op_gt -> return "comp_gt_"
+                Op_lt -> return "comp_lt_"        
+            f2 <- case ty of
+                FloatType -> return "real"
+                _ -> return "int"    
+                -- int, boolean and string are compared as int
+            putCode [f1++f2, reg, rg, rg1]
+            return (reg, BoolType, BoolExpr (vl==vl1))
