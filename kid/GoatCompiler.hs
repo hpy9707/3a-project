@@ -24,11 +24,13 @@ data State = State
     -- dictionary to store procedures {id: [argtypes]}
       procedures :: Map.Map String [BaseType],
     -- dictionary to store variables {id: (slotnumber, type)}
-      variables :: Map.Map String GoatType,
+      variables :: Map.Map String (Int, GoatType),
     -- register counter
       regCount :: Int,
     -- label counter
-      labelCount :: Int
+      labelCount :: Int,
+    -- slot counter
+      slotCount :: Int
     }
 
 -- data, instances and functions relating to the state monad
@@ -99,12 +101,22 @@ putProcedure id args = Update (\st ->
         ((), st { procedures = newMap }))
 
 -- XXX call this function to add a variable to the current environment
-putVariable :: String -> GoatType -> Update ()
-putVariable id t = Update (\st ->
+putVariable :: String -> Int -> GoatType -> Update ()
+putVariable id slotnumber t = Update (\st ->
     let newMap = if Map.member id (variables st)
             then error $ "multiple declarations for " ++ id
-            else Map.insert id t (variables st) in
+            else Map.insert id (slotnumber, t) (variables st) in
         ((), st { variables = newMap }))
+
+-- call this function to get a variable's slot number and type
+getVariable :: String -> Update (Int, GoatType)
+getVariable id = do
+    st <- getState
+    map <- return (variables st)
+    val <- return (Map.lookup id map)
+    case val of
+        (Just (i, t)) -> return (i, t)
+        Nothing -> error $ "variable " ++ id ++ " is referenced without declaration"
 
 incrementRegister :: Update ()
 incrementRegister = Update (\st ->
@@ -119,6 +131,26 @@ allocateRegister = do
     incrementRegister
     return ("r" ++ (show r))
 
+-- increment slotCount by 1
+incrementSlot :: Update ()
+incrementSlot = Update (\st ->
+    let l = (slotCount st) in
+    ((), st { slotCount = l + 1 }))
+
+-- get the next slot number and increment
+getSlotNext :: Update Int
+getSlotNext = do
+    st <- getState
+    s <- return $ slotCount st
+    incrementSlot
+    return s
+
+getSlotCurrent :: Update Int
+getSlotCurrent = do
+    st <- getState
+    s <- return $ slotCount st
+    return s
+
 -- compile the program and return a string of the Oz code compiled from a Goat program.
 -- TODO: handle more than one procedure
 compileProgram :: Program -> String
@@ -129,7 +161,8 @@ compileProgram (Program procs) =
             procedures = Map.empty,
             variables = Map.empty,
             labelCount = 0,
-            regCount = 0
+            regCount = 0,
+            slotCount = 0
             }
         gen =  do
             putCode ["call", "proc_main"]
@@ -154,7 +187,40 @@ compileProcedure :: Procedure -> Update ()
 compileProcedure (Procedure pos id args decls stmts) = do
     putLabelWithName ("proc_" ++ id ++ ":")
     putCode ["push_stack_frame" ++ (show ((length args) + (length decls)))]
+    compileDeclList decls
     compileStmtList stmts
+
+--compile a list of variable declarations
+compileDeclList :: [Decl] -> Update ()
+compileDeclList (x:decls) = do
+    compileDecl x
+    compileDeclList decls
+compileDeclList [] = do return ()
+
+-- compile a variable declaration
+compileDecl :: Decl -> Update ()
+compileDecl (Decl pos ident t) = do
+    reg <- allocateRegister
+    slot <- getSlotCurrent
+    -- initialise numerical variables to 0
+    baseType <- case t of
+        Base bt -> return bt
+        Array bt n -> return bt
+        Matrix bt m n -> return bt
+    (f, val) <- case baseType of
+        FloatType -> return ("real_const", "0.0")
+        _ -> return ("int_const", "0")
+    initialiseVars f reg 1 val
+    putVariable ident slot t
+
+-- repeatedly generate code for initialising variables n times
+initialiseVars :: String -> String -> Int -> String -> Update ()
+initialiseVars _ _ 0 val = do return ()
+initialiseVars func reg n val = do
+    s <- getSlotNext
+    putCode [func, reg, val]
+    putCode ["store", (show s), reg]
+    initialiseVars func reg (n - 1) val
 
 -- compile a list of statments
 compileStmtList :: [Stmt] -> Update ()
