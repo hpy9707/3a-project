@@ -185,7 +185,40 @@ compileProcedure :: Procedure -> Update ()
 compileProcedure (Procedure pos id args decls stmts) = do
     putLabelWithName ("proc_" ++ id ++ ":")
     putCode ["push_stack_frame" ++ (show ((length args) + (length decls)))]
+    compileDeclList decls
     compileStmtList stmts
+
+--compile a list of variable declarations
+compileDeclList :: [Decl] -> Update ()
+compileDeclList (x:decls) = do
+    compileDecl x
+    compileDeclList decls
+compileDeclList [] = do return ()
+
+-- compile a variable declaration
+compileDecl :: Decl -> Update ()
+compileDecl (Decl pos ident t) = do
+    reg <- allocateRegister
+    slot <- getSlotCurrent
+    -- initialise numerical variables to 0
+    baseType <- case t of
+        Base bt -> return bt
+        Array bt n -> return bt
+        Matrix bt m n -> return bt
+    (f, val) <- case baseType of
+        FloatType -> return ("real_const", "0.0")
+        _ -> return ("int_const", "0")
+    initialiseVars f reg 1 val
+    putVariable ident slot t
+
+-- repeatedly generate code for initialising variables n times
+initialiseVars :: String -> String -> Int -> String -> Update ()
+initialiseVars _ _ 0 val = do return ()
+initialiseVars func reg n val = do
+    s <- getSlotNext
+    putCode [func, reg, val]
+    putCode ["store", (show s), reg]
+    initialiseVars func reg (n - 1) val
 
 -- compile a list of statments
 compileStmtList :: [Stmt] -> Update ()
