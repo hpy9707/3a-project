@@ -1,0 +1,5 @@
+proc main()
+    float k;
+begin
+    k := 5.5;
+end

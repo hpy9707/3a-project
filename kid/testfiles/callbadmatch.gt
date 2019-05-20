@@ -1,0 +1,15 @@
+proc main()
+int a;
+float b;
+begin
+    a := 5;
+    b := 0.1;
+    call p(a, b);
+    write a;
+end
+
+proc p(ref int b, val int c)
+begin
+    write b;
+    b := 6;
+end

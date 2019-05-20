@@ -1,0 +1,14 @@
+proc main()
+int a;
+int b;
+begin
+    a := 5;
+    b := 4;
+    call p(a, b);
+end
+
+proc p(val int c, ref int d)
+begin
+    write c;
+    write d;
+end

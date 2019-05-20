@@ -1,0 +1,8 @@
+proc main()
+    int k;
+    float k;
+begin
+    k := 1;
+    write k;
+    write "\n";
+end

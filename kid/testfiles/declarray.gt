@@ -1,0 +1,17 @@
+proc main()
+    int k[2];
+    float f[2,3];
+begin
+    write "Hello, kid!\n";
+end
+
+proc one(val int n)
+    bool b;
+begin
+    write "Hello, kid!\n";
+end
+
+proc main()
+begin
+    write "Hello, kid!\n";
+end

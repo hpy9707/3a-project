@@ -1,0 +1,12 @@
+proc main()
+    int k;
+    float l;
+    bool m;
+begin
+    write k;
+    write "\n";
+    write l;
+    write "\n";
+    write m;
+    write "\n";
+end

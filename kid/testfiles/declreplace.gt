@@ -1,0 +1,7 @@
+proc main()
+    float k;
+begin
+    k := 1.5;
+    k := 2.2;
+    write k;
+end

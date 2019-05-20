@@ -1,0 +1,26 @@
+proc main()
+int a;
+float b;
+begin
+    a := 1;
+    b := 2.0;
+    write a;
+    write b;
+    call p(a, a);
+    write a;
+end
+
+proc p(ref int x, val int y)
+int q;
+float r;
+begin
+    write x;
+    q := 3;
+    r := 4.0;
+    x := 5;
+    write y;
+    write q;
+    write r;
+    write x;
+end
+# 1 2.0 1 1 3 4.0 5 5

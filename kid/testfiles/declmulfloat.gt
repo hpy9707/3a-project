@@ -1,0 +1,24 @@
+proc main()
+    int k;
+    float f;
+begin
+    f := 1;
+    write "one\n";
+    write f;
+    write "\n";
+    call one();
+end
+
+proc one()
+    bool b;
+begin
+    write "two\n";
+    write b;
+    write "\n";
+    call two();
+end
+
+proc two()
+begin
+    write "three\n";
+end

@@ -1,4 +1,0 @@
-proc main()
-begin
-    call p(n, 1+3, "the");
-end

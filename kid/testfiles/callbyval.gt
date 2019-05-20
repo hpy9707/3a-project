@@ -1,0 +1,13 @@
+proc main()
+int a;
+begin
+    a := 5;
+    call p(a);
+    write a;
+end
+
+proc p(val int b)
+begin
+    write b;
+    b := 6;
+end
