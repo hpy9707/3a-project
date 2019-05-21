@@ -328,3 +328,60 @@ compileExpr (Rel pos relop expr expr1) = do
                 -- int, boolean and string are compared as int
             putCode [f1++f2, reg, rg, rg1]
             return (reg, BoolType, BoolExpr (vl==vl1))
+compileExpr (Id pos id) = do
+    reg <- allocateRegister
+    (slotnumber, ty) <- getVariable id 
+    case ty of
+        (Base t) -> do
+            putCode ["load", reg, (show slotnumber)]
+            return (reg, t, StringExpr "")
+compileExpr (ArrayRef pos id expr) = do
+    reg <- allocateRegister
+    reg1 <- allocateRegister
+    (slotnumber, ty) <- getVariable id 
+    case ty of
+        (Array t i) -> do
+            case expr of
+                (IntCon pos eI) -> do
+                    putCode ["int_const", reg , (show eI)]
+                    putCode ["load_address", reg1, (show slotnumber)]
+                    putCode ["sub_offset", reg, reg1, reg]
+                    putCode ["load_indirect", reg, reg]
+                    return (reg, t, StringExpr "")
+compileExpr (MatrixRef pos id expr expr1) = do
+    reg <- allocateRegister
+    reg1 <- allocateRegister
+    (slotnumber, ty) <- getVariable id 
+    case ty of
+        (Matrix t i j) -> do
+            case expr of
+                (IntCon pos eI) -> do
+                    case expr1 of
+                        (IntCon pos eJ) -> do
+                            putCode ["int_const", reg , (show eI)]
+                            putCode ["int_const", reg1, (show j)]
+                            putCode ["mul_int", reg, reg, reg1]
+                            putCode ["int_const", reg1, (show eJ)]
+                            putCode ["add_int", reg, reg, reg1]
+                            putCode ["load_address", reg1, (show slotnumber)]
+                            putCode ["sub_offset", reg, reg1, reg]
+                            putCode ["load_indirect", reg, reg]
+                            return (reg, t, StringExpr "")
+compileExpr (BinOpExp pos binop expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty, vl) <- compileExpr expr
+    (rg1, ty1, vl1) <- compileExpr expr1
+    f1 <- case binop of
+        Op_add -> return "add_"
+        Op_sub -> return "sub_"
+        Op_mul -> return "mul_"
+        Op_div -> return "div_"        
+    f2 <- case ty of
+        FloatType -> return "real"
+        IntType -> return "int"    
+    putCode [f1++f2, reg, rg, rg1]
+    resultType <- if ty == IntType && ty1 == IntType then return IntType
+        else do 
+            return FloatType 
+    return (reg, resultType, StringExpr "")
+        

@@ -1,0 +1,5 @@
+proc main()
+    int x[2, 3];
+begin
+    write x[2, 3];
+end
