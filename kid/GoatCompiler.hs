@@ -185,9 +185,9 @@ compileProcedure :: Procedure -> Update ()
 compileProcedure (Procedure pos id args decls stmts) = do
     putLabelWithName ("proc_" ++ id ++ ":")
     putCode ["push_stack_frame" ++ (show ((length args) + (length decls)))]
-    compileDeclList decls
     compileStmtList stmts
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 --compile a list of delcartions 
 compileDeclList ::[Decl] -> Update()
@@ -241,6 +241,8 @@ initialiseVars func reg n val = do
     initialiseVars func reg (n - 1) val
 >>>>>>> master
 
+=======
+>>>>>>> parent of 3ec3061... Add declarations
 -- compile a list of statments
 compileStmtList :: [Stmt] -> Update ()
 compileStmtList (x:stmts) = do
