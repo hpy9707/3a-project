@@ -80,8 +80,9 @@ putLabelWithName name = Update (\st ->
 -- label number
 putLabelNext :: Update ()
 putLabelNext = do
-    putLabelNextHelper
     incrementLabel
+    putLabelNextHelper
+    
 
 putLabelNextHelper :: Update ()
 putLabelNextHelper = 
@@ -148,9 +149,18 @@ getSlotCurrent = do
     st <- getState
     s <- return $ slotCount st
     return s
+getLabelCurrent ::Update Int
+getLabelCurrent= do 
+    st<- getState
+    s<- return $ labelCount st
+    return s
 
 -- compile the program and return a string of the Oz code compiled from a Goat program.
 -- TODO: handle more than one procedure
+--Take if as an eample:
+--suppose it starts with 0 if true turn to label 0(no change) if not goto uncond label 1(create) 
+--in label 1 there is another is statement if true goto label 1. It is illegal.
+--as a result set lable count to -1 is a good choice.
 compileProgram :: Program -> String
 compileProgram (Program procs) =
     let
@@ -158,7 +168,7 @@ compileProgram (Program procs) =
             { code = "",
             procedures = Map.empty,
             variables = Map.empty,
-            labelCount = 0,
+            labelCount = -1,
             regCount = 0,
             slotCount = 0
             }
@@ -187,27 +197,6 @@ compileProcedure (Procedure pos id args decls stmts) = do
     putCode ["push_stack_frame" ++ (show ((length args) + (length decls)))]
     compileStmtList stmts
 
-<<<<<<< HEAD
-<<<<<<< HEAD
---compile a list of delcartions 
-compileDeclList ::[Decl] -> Update()
-compileDeclList (x:decls)=do
-    compileDecl x
-    compileDeclList decls
-compileDeclList [] = Update (\st -> ((), st))
-
---compile one declaration
-compileDecl :: Decl -> Update()
-compileDecl (Decl pos id goattype)= do
-    putVariable id goattype
-    compilegoattype goattype
-
---this should be done: search the slotnumber by a specific id 
--- create relative space for array/matrix? 
- --compileGoatType:: GoatType -> Update()
-
-
-=======
 --compile a list of variable declarations
 compileDeclList :: [Decl] -> Update ()
 compileDeclList (x:decls) = do
@@ -239,10 +228,20 @@ initialiseVars func reg n val = do
     putCode [func, reg, val]
     putCode ["store", (show s), reg]
     initialiseVars func reg (n - 1) val
->>>>>>> master
+--compile lvalue    
+compileLvalue ::Lvalue->Update()
+compileLvalue (LId pos iden)= do
+    (slotnum,goattype)<- getVariable  iden
+    putCode["store",show slotnum,"r0"]
 
-=======
->>>>>>> parent of 3ec3061... Add declarations
+parseLvalue ::Lvalue->Update(BaseType)
+parseLvalue (LId pos iden) = do
+    (slotnum,goattype)<- getVariable iden
+    basetype <- case goattype of
+        Base bt -> return bt
+        Array bt n -> return bt
+        Matrix bt m n -> return bt
+    return basetype
 -- compile a list of statments
 compileStmtList :: [Stmt] -> Update ()
 compileStmtList (x:stmts) = do
@@ -252,6 +251,7 @@ compileStmtList [] = Update (\st -> ((), st))
 
 -- compile a statement
 compileStmt :: Stmt -> Update ()
+-- compile write
 compileStmt (Write pos expr) = do
     (reg, baseType) <- compileExpr expr
     func <- case baseType of
@@ -264,46 +264,64 @@ compileStmt (Write pos expr) = do
     putCode ["move", "r0", reg]
     putCode ["call_builtin", func]
 
- -- question? how to get the slotnumber of variable and the logic of array/ matrix
--- compileLvalue ::Lvalue->Update(Slotnumber,BaseType)
--- compileLvalue lvalue= do
+ 
 
+--compile read
 compileStmt (Read pos lvalue)= do
-    (slotnum,basetype) <- compileLvalue lvalue
-    func,_ case basetype of 
+    basetype<- parseLvalue lvalue
+    func<- case basetype of 
         BoolType-> return "read_bool" 
         IntType -> return "read_int"
         FloatType -> return "read_real"
-        StringType -> return "read_string"
-    putcode ["call_builtin",func]
-    putcode ["store",slotnum,"r0"]
+    putCode ["call_builtin",func]
+    compileLvalue lvalue    
+ 
+--compile assignment reamining to be done: depending on the data structure of expr
+ compileStmt(Assign pos lvalue expr)=do
+    compileExpr expr
+    compileLvalue lvalue   
 
-    --question: how to get the current label number? 
+
+--compile if   
 compileStmt(If pos expr stmt) = do 
     compileExpr expr
-    putCode["branch_on true","r0,",labelname]
-    putLabelNext
+    incrementLabel--label 0
+    currentNum <- getLabelCurrent 
+    putCode["branch_on true","r0,","label_"++ show currentNum]
+    putCode["branch_uncond","label_"++ show (currentNum + 1)]
+    putLabelNextHelper
     compileStmtList stmt
-    putCode["branch_uncond",labelname]
-    putLabelNext
-
+    putLabelNext --label 1 +reamining part
+    
+--compile ifelse
 compileStmt(IfElse pos expr stmt1 stmt2)=do
     compileExpr expr
-    putLabelNext
-    putCode["branch_on ture","r0,",labelname]
+    incrementLabel
+    currentNum <- getLabelCurrent
+    putCode["branch_on ture","r0,","label_"++ show currentNum]
+    
+    putCode["branch_on false","r0","label_"++ show (currentNum+1)]
+  
+    putCode["branch_uncond","label_"++ show (currentNum+2)]
+    putLabelNextHelper
     compileStmtList stmt1
     putLabelNext
-    putCode["branch_on false","r0",labelname]
     compileStmtList stmt2
-    putlabelNext
-    putCode["branch_uncond",labelname]
-
-compileStmt(While pos expr stmt)=do
-    compileExpr expr
-    putCode["branch_on true","r0,",labelname]
     putLabelNext
+
+--compile while
+compileStmt(While pos expr stmt)=do
+    incrementLabel
+    putLabelNextHelper
+    compileExpr expr
+    incrementLabel
+    currentNum <- getLabelCurrent
+    
+    putCode["branch_on true","r0,","label_"++ show currentNum]
+ 
+    putCode["branch_uncond","label_"++ show (currentNum + 1)]
+    putLabelNextHelper
     compileStmtList stmt
-    putCode["branch_uncond",labelname]
     putLabelNext
 
 -- Compile an expression and return its register number and type
