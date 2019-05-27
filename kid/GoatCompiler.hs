@@ -237,6 +237,8 @@ compileLvalue ::Lvalue->Update()
 compileLvalue (LId pos iden)= do
     (slotnum,goattype)<- getVariable  iden
     putCode["store",show slotnum,"r0"]
+compileLvalue (LArrayRef Pos Ident Expr) = do
+    
 
 parseLvalue ::Lvalue->Update(BaseType)
 parseLvalue (LId pos iden) = do
