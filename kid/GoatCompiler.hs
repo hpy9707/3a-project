@@ -217,7 +217,11 @@ compileDecl (Decl pos ident t) = do
     (f, val) <- case baseType of
         FloatType -> return ("real_const", "0.0")
         _ -> return ("int_const", "0")
-    initialiseVars f reg 1 val
+    time <- case t of 
+        Base bt -> return 1
+        Array bt n -> return n
+        Matrix bt m n -> return (n*m)
+    initialiseVars f reg time val
     putVariable ident slot t
 
 -- repeatedly generate code for initialising variables n times
@@ -264,7 +268,7 @@ compileStmt (Write pos expr) = do
     putCode ["move", "r0", reg]
     putCode ["call_builtin", func]
 
- 
+
 
 --compile read
 compileStmt (Read pos lvalue)= do
@@ -277,7 +281,7 @@ compileStmt (Read pos lvalue)= do
     compileLvalue lvalue    
  
 --compile assignment reamining to be done: depending on the data structure of expr
- compileStmt(Assign pos lvalue expr)=do
+compileStmt(Assign pos lvalue expr)=do
     compileExpr expr
     compileLvalue lvalue   
 
@@ -324,7 +328,8 @@ compileStmt(While pos expr stmt)=do
     compileStmtList stmt
     putLabelNext
 
--- Compile an expression and return its register number and type
+
+    -- Compile an expression and return its register number and type
 compileExpr :: Expr -> Update (String, BaseType)
 compileExpr (StrCon pos val) = do
     reg <- allocateRegister
