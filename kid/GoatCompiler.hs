@@ -235,10 +235,24 @@ initialiseVars func reg n val = do
 --compile lvalue    
 compileLvalue ::Lvalue->Update()
 compileLvalue (LId pos iden)= do
-    (slotnum,goattype)<- getVariable  iden
+    (slotnum,goattype)<- getVariable iden
     putCode["store",show slotnum,"r0"]
-compileLvalue (LArrayRef Pos Ident Expr) = do
-    
+
+compileLvalue (LArrayRef pos iden expr) = do
+    (slotnum,goattype)<- getVariable iden
+    val <- getIntfromExpr expr
+    putCode["store",show (slotnum+val),"r0"]
+
+compileLvalue (LMatrixRef pos iden expr1 expr2 ) = do
+    (slotnum,goattype)<- getVariable iden
+    coltotal <- case goattype of
+        Matrix bt m n -> return n
+    linenum <- getIntfromExpr expr1
+    colnum <- getIntfromExpr expr2
+    putCode["store",show (slotnum+linenum*coltotal+colnum),"r0"]
+--helper function to get the number from expression    
+getIntfromExpr:: Expr->Update Int
+getIntfromExpr (IntCon pos val) = do return val    
 
 parseLvalue ::Lvalue->Update(BaseType)
 parseLvalue (LId pos iden) = do
