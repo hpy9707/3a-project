@@ -1,0 +1,7 @@
+proc main()
+    float a;
+begin
+    a := -25;
+    write a;
+    write "\n";
+end

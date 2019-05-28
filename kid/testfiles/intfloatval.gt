@@ -1,0 +1,10 @@
+proc main()
+begin
+    call p(2+10);
+end
+
+proc p(val float b)
+begin
+    write b;
+    write "\n";
+end

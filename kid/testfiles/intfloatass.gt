@@ -1,0 +1,8 @@
+proc main()
+    float a;
+begin
+    a := 15;
+    write a;
+    a := a + 2.5;
+    write a;
+end

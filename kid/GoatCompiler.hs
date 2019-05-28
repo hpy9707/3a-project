@@ -72,7 +72,7 @@ popVarStack = Update (\st ->
     let (x:vars) = (variableStack st) in
         ((), st { variableStack = vars }))
 
--- XXX call this function to add a variable to the current environment
+-- call this function to add a variable to the current environment
 putVariable :: String -> Int -> ParMode -> GoatType -> Update ()
 putVariable id i mode t = Update (\st ->
     let (x:vars) = variableStack st
@@ -91,7 +91,7 @@ getVariable id = do
         (Just (i, p, t)) -> return (i, p, t)
         Nothing -> error $ "variable " ++ id ++ " is referenced without declaration"
 
--- XXX call this function to append an instruction to the generated code
+-- call this function to append an instruction to the generated code
 putCode :: [String] -> Update ()
 putCode (x:strings) = Update (\st ->
     let c = (code st) in
@@ -109,19 +109,19 @@ putLabelWithName name = Update (\st ->
     let c = (code st) in
     ((), st { code = c ++ name ++ "\n"}))
 
--- XXX create a label, with the name automatically generated using the next
+-- create a label, with the name automatically generated using the next
 -- label number
-putLabelNext :: Update ()
-putLabelNext = do
-    putLabelNextHelper
+getLabelNext :: Update (String)
+getLabelNext = do
+    st <- getState
     incrementLabel
+    return ("label_" ++ (show (labelCount st)))
 
-putLabelNextHelper :: Update ()
-putLabelNextHelper = 
+putLabel :: String -> Update ()
+putLabel label = 
     Update (\st ->
-    let c = (code st) 
-        l = (labelCount st) in
-    ((), st { code = c ++ "label_" ++ (show l) ++ ":\n"}))
+    let c = (code st) in
+    ((), st { code = c ++ label ++ ":\n"}))
 
 -- increment slotCount by 1
 incrementSlot :: Update ()
@@ -187,17 +187,16 @@ resetRegister = Update (\st ->
     ((), st { regCount = 0 }))
 
 -- increase regCount by 1
-incrementRegister :: Update ()
-incrementRegister = Update (\st ->
-    let r = (regCount st) in
-    ((), st { regCount = r + 1 }))
+incrementRegister :: String -> Update ()
+incrementRegister (r:num) = Update (\st ->
+    let i = read num::Int in
+    ((), st { regCount = i + 1 }))
 
 -- call this function to receive the next register
 allocateRegister :: Update (String)
 allocateRegister = do
     st <- getState
     r <- return $ regCount st
-    incrementRegister
     return ("r" ++ (show r))
 
 -- compile the program and return a string of the Oz code compiled from a Goat program.
@@ -274,7 +273,9 @@ countBaseStackSize (Matrix _ m n) = m * n
 --compile a list of procedure arguments
 compileArgList :: [FormalArgSpec] -> Update ()
 compileArgList (x:args) = do
+    reg <- allocateRegister
     compileArg x
+    incrementRegister reg
     compileArgList args
 compileArgList [] = do return ()
 
@@ -296,6 +297,7 @@ compileDeclList [] = do return ()
 -- compile a variable declaration
 compileDecl :: Decl -> Update ()
 compileDecl (Decl pos ident t) = do
+    resetRegister
     reg <- allocateRegister
     slot <- getSlotCurrent
     -- initialise numerical variables to 0
@@ -306,7 +308,10 @@ compileDecl (Decl pos ident t) = do
     (f, val) <- case baseType of
         FloatType -> return ("real_const", "0.0")
         _ -> return ("int_const", "0")
-    initialiseVars f reg 1 val
+    case t of
+        Base _ -> do initialiseVars f reg 1 val
+        Array _ n -> do initialiseVars f reg n val
+        Matrix _ m n -> do initialiseVars f reg (m * n) val    
     putVariable ident slot Val t
 
 -- repeatedly generate code for initialising variables n times
@@ -321,6 +326,7 @@ initialiseVars func reg n val = do
 -- compile a list of statments
 compileStmtList :: [Stmt] -> Update ()
 compileStmtList (x:stmts) = do
+    resetRegister
     compileStmt x
     compileStmtList stmts
 compileStmtList [] = do return ()
@@ -338,6 +344,16 @@ compileStmt (Write pos expr) = do
     -- its argument from
     putCode ["move", "r0", reg]
     putCode ["call_builtin", func]
+compileStmt (Read pos lvalue) = do
+    -- value is stored in r0 because this is where builtin function takes
+    -- its argument from
+    reg0 <- allocateRegister
+    baseType <- compileLvalue lvalue reg0
+    func <- case baseType of
+        BoolType -> return "read_bool"
+        IntType -> return "read_int"
+        FloatType -> return "read_real"
+    putCode ["call_builtin", func]
 compileStmt (ProcCall pos id exprs) = do
     sig <- (getProcedure id)
     if length exprs /= length sig then
@@ -347,25 +363,98 @@ compileStmt (ProcCall pos id exprs) = do
         resetRegister
         compileExprList exprs sig
         putCode ["call", "proc_" ++ id]
- -- TODO: complete this (incl for arrays/matrices) (check types, int->float, see declmulffloat)
-compileStmt (Assign pos (LId _ id) expr) = do
-    (reg1, t) <- compileExpr expr
-    (slotNum, mode, (Base t)) <- getVariable id
+-- compile assignment statement
+compileStmt (Assign pos lval expr) = do
+    (reg0, expr_t) <- compileExpr expr
+    id <- case lval of
+        LId _ ident -> return ident
+        LArrayRef _ ident _ -> return ident
+        LMatrixRef _ ident _ _ -> return ident
+    (slotNum, mode, goat_t) <- getVariable id
+    -- make sure expression matches the Lvalue type (arrays must be accessed as arrays etc)
+    decl_t <- case goat_t of
+        Base t -> return t
+        Array t _ -> return t
+        Matrix t _ _ -> return t
+    -- check that types are compatible
+    if (expr_t /= decl_t && not (expr_t == IntType && decl_t == FloatType)) then
+        error $ "cannot assign type " ++ (show expr_t) ++ " to type " ++ (show decl_t)
+    else
+        return ()
+    -- convert int to float if necessary
+    if (expr_t == IntType && decl_t == FloatType) then
+        putCode ["int_to_real", reg0, reg0]
+    else
+        return ()
+    -- generate code for assigning r0 to lval
+    compileLvalue lval reg0
+    return ()
+
+compileLvalue :: Lvalue -> String -> Update (BaseType)
+compileLvalue (LId _ id) reg0 = do
+    (slotNum, mode, goat_t) <- getVariable id
+    -- make sure LH expression matches the stored identifier's type (arrays must be accessed as arrays etc)
+    baseType <- case goat_t of
+        Base baseType -> return baseType
+        _ -> error $ "single variables cannot by accessed like arrays or matrices"
+    -- generate code to store reg0 into the Lvalue
+    incrementRegister reg0
     case mode of
         Ref -> do
-            reg2 <- allocateRegister
-            putCode ["load", reg2, (show slotNum)]
-            putCode ["store_indirect", reg2, reg1]
+            reg1 <- allocateRegister
+            putCode ["load", reg1, (show slotNum)]
+            putCode ["store_indirect", reg1, reg0]
         Val -> do
-            putCode ["store", (show slotNum), reg1]
-    
+                putCode ["store", (show slotNum), reg0]
+    return (baseType)
+compileLvalue (LArrayRef _ id expr0) reg0 = do
+    (slotNum, mode, goat_t) <- getVariable id
+    -- make sure LH expression matches the stored identifier's type (arrays must be accessed as arrays etc)
+    baseType <- case goat_t of
+        Array baseType _ -> return baseType
+        _ -> error $ "array variables must be accessed with a single index"
+    -- generate code to store reg0 into the Lvalue
+    incrementRegister reg0
+    (reg1, expr_t0) <- compileExpr expr0
+    if (expr_t0 /= IntType) then
+        error $ "Array index must be type Int"
+    else do return ()
+    incrementRegister reg1
+    reg2 <- allocateRegister
+    putCode["load_address", reg2, show slotNum]
+    putCode["sub_offset", reg1, reg2, reg1]
+    putCode["store_indirect", reg1, reg0]
+    return (baseType)
+compileLvalue (LMatrixRef _ id expr0 expr1) reg0 = do
+    (slotNum, mode, goat_t) <- getVariable id
+    -- make sure LH expression matches the stored identifier's type (arrays must be accessed as arrays etc)
+    (baseType, j) <- case goat_t of
+        Matrix baseType _ j -> return (baseType, j)
+        _ -> error $ "array variables must be accessed with a single index"
+    -- generate code to store reg0 into the Lvalue
+    incrementRegister reg0
+    (reg1, expr_t0) <- compileExpr expr0
+    incrementRegister reg1
+    (reg2, expr_t1) <- compileExpr expr1
+    if (expr_t0 /= IntType || expr_t1 /= IntType) then
+        error $ "Matrix index must be type Int"
+    else do return ()
+    incrementRegister reg2
+    reg3 <- allocateRegister
+    putCode["int_const", reg3, (show j)]
+    putCode["mul_int", reg1, reg1, reg3]
+    putCode["add_int", reg1, reg1, reg2]
+    putCode["load_address", reg2, (show slotNum)]
+    putCode["sub_offset", reg1, reg2, reg1]
+    putCode["store_indirect", reg1, reg0]
+    return (baseType)
 
 -- compile list of expressions and check their types match a given signature
 compileExprList :: [Expr] -> [(ParMode, BaseType)] -> Update ()
 compileExprList (e:exprs) ((sigMode, sigT):sig) = do
-    -- TODO: make sure calling compileExpr successifly results in consequtive register numbers
-    (reg, exprT) <- (compileExpr e)
-    if (sigT /= exprT) then
+    reg <- allocateRegister
+    (rg, exprT) <- (compileExpr e)
+    if (sigT /= exprT && not (sigT == FloatType && exprT == IntType)) then
         error $ "expression type " ++ (show exprT) ++ 
             " does not match the type required by the function signature, "
              ++ (show sigT)
@@ -373,30 +462,45 @@ compileExprList (e:exprs) ((sigMode, sigT):sig) = do
         if sigMode == Ref then do
             -- check that the expression is the correct form i.e. a scalar: 
             -- either a variable, array reference or matrix
-            exprIsScalar <- case e of
-                (Id _ id) -> return True -- TODO: change this to (Just id)
-                (ArrayRef _ id _) -> return True
-                (MatrixRef _ id _ _) -> return True
-                _ -> return False --- change this to Nothing
-            if not exprIsScalar then
-                error $ "arguments passed by reference must be scalar"
-            else do
-                -- get slot number of expression
-                -- TODO: make slotnumber getting work for arrays and matrices
-                case e of 
-                    (Id _ id) -> do
-                        (slotNum, _, _) <- getVariable id
-                        putCode ["load_address", reg, show slotNum] 
-        else do
-            -- TODO: this will be handled by compileExpr (Id...) etc
             case e of
                 (Id _ id) -> do
                     (slotNum, _, _) <- getVariable id
-                    putCode ["load", reg, show slotNum] -- don't need this
+                    putCode ["load_address", reg, show slotNum] 
+                (ArrayRef _ id expr0) -> do
+                    (slotNum, _, _) <- getVariable id
+                    putCode ["load_address", reg, (show slotNum)]
+                    incrementRegister reg
+                    reg1 <- allocateRegister
+                    compileExpr expr0
+                    putCode ["sub_offset", reg, reg, reg1]
+                (MatrixRef _ id expr0 expr1) -> do
+                    (slotNum, _, t) <- getVariable id
+                    case t of
+                        (Matrix _ _ j) -> do
+                            compileExpr expr0
+                            incrementRegister reg
+                            reg1 <- allocateRegister
+                            compileExpr expr1
+                            incrementRegister reg1 
+                            reg2 <- allocateRegister
+                            putCode ["int_const", reg2, (show j)]
+                            putCode ["mul_int", reg, reg, reg2]
+                            putCode ["add_int", reg, reg, reg1]
+                            putCode ["load_address", reg1, (show slotNum)]
+                            putCode ["sub_offset", reg, reg1, reg]
+                _ -> error $ "arguments passed by reference must be scalar"
+            return ()
+        else do
+            -- convert int to float if necessary
+            if (sigT == FloatType && exprT == IntType) then
+                putCode ["int_to_real", rg, rg]
+            else 
+                return ()
+    incrementRegister reg
     compileExprList exprs sig
 compileExprList [] [] = do return ()
 
--- Compile an expression and return its register number and type
+-- Compile an expression and return its register number, type and value
 compileExpr :: Expr -> Update (String, BaseType)
 compileExpr (StrCon pos val) = do
     reg <- allocateRegister
@@ -406,15 +510,98 @@ compileExpr (IntCon pos val) = do
     reg <- allocateRegister
     putCode ["int_const", reg, (show val)]
     return (reg, IntType)
--- TODO: either convert val so it has a decimal, or throw error, or convert int to float
 compileExpr (FloatCon pos val) = do
     reg <- allocateRegister
     putCode ["real_const", reg, (show val)]
     return (reg, FloatType)
--- TODO: deal with arrays/matrices
+compileExpr (BoolCon pos val) = do
+    reg <- allocateRegister
+    bool <- case val of
+        True -> return 1
+        False -> return 0
+    putCode ["int_const", reg, (show bool)]
+    return (reg, BoolType)
+compileExpr (And pos expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty) <- compileExpr expr
+    if (ty /= BoolType)
+        then error $ "Logical operator arguments must have type bool"
+        else do
+            label0 <- getLabelNext
+            putCode["branch_on_false", reg, label0]
+            incrementRegister reg
+            (rg1, ty1) <- compileExpr expr1 
+            if ty1 /= BoolType
+                then error $ "Logical operator arguments must have type bool"
+                else do 
+                    putCode ["and", reg, rg, rg1]
+                    putLabel label0
+                    return (reg, BoolType)
+compileExpr (Or pos expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty) <- compileExpr expr
+    if (ty /= BoolType)
+        then error $ "Logical operator arguments must have type bool"
+        else do
+            label0 <- getLabelNext
+            putCode["branch_on_true", reg, label0]
+            incrementRegister reg
+            (rg1, ty1) <- compileExpr expr1 
+            if ty1 /= BoolType
+                then error $ "Logical operator arguments must have type bool"
+                else do 
+                    putCode ["or", reg, rg, rg1]
+                    putLabel label0
+                    return (reg, BoolType)
+compileExpr (Not pos expr) = do
+    reg <- allocateRegister
+    (rg, ty) <- compileExpr expr
+    if ty /= BoolType
+        then error $ "Logical operator arguments must have type bool"
+        else do
+            putCode ["not", reg, rg]
+            return (reg, BoolType)
+compileExpr (Rel pos relop expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty) <- compileExpr expr
+    incrementRegister reg
+    (rg1, ty1) <- compileExpr expr1
+    
+    if (relop == Op_eq || relop == Op_ne) then
+        if ty /= ty1
+            then error $ "arguments for Equal and NotEqual must have the same type"
+        else return ()
+    else if (ty == IntType || ty == FloatType) && (ty1 /= IntType && ty1 /= FloatType)
+        then error $ "Comparison between incomensurable types, " ++ (show ty) ++ "and " ++ (show ty1)
+    else return ()
+    f1 <- case relop of
+        Op_eq -> return "cmp_eq"
+        Op_ne -> return "cmp_ne"
+        Op_ge -> return "cmp_ge"
+        Op_le -> return "cmp_le"
+        Op_gt -> return "cmp_gt"
+        Op_lt -> return "cmp_lt"  
+    f2 <- case (ty == FloatType || ty1 == FloatType) of
+    -- if either argument are float, the result is float
+        True -> return "_real"
+    -- int, boolean and string are compared as int
+        False -> return "_int" 
+    -- convert int to float if necessary
+    if (ty == FloatType && ty1 == IntType) then
+        putCode ["int_to_real", rg1, rg1]
+    else return ()
+    if (ty1 == FloatType && ty == IntType) then
+        putCode ["int_to_real", rg, rg]
+    else return ()
+    putCode [f1++f2, reg, rg, rg1]
+    return (reg, BoolType)
 compileExpr (Id pos id) = do
     reg <- allocateRegister
-    (slotNum, mode, (Base t)) <- getVariable id
+    (slotNum, mode, goatType) <- getVariable id
+    t <- case goatType of
+        (Base t) -> return t
+        (Array _ _) -> error $ "Array must be referenced with an index"
+        (Matrix _ _ _) -> error $ "Matrix must be referenced with two indices"
     case mode of
         Ref -> do
             -- First load the reference address then use load_indirect to load the actual value
@@ -423,4 +610,93 @@ compileExpr (Id pos id) = do
         Val -> do
             putCode ["load", reg, (show slotNum)]            
     return (reg, t)
+compileExpr (ArrayRef pos id expr) = do
+    (slotnumber, mode, ty) <- getVariable id
+    -- TODO: handle other cases than IntCon 
+    case ty of
+        (Array t i) -> do
+            reg <- allocateRegister
+            (_, expr_t) <- compileExpr expr
+            if (expr_t /= IntType) then
+                error $ "array index must be type int"
+            else return ()
+            incrementRegister reg
+            reg1 <- allocateRegister
+            putCode ["load_address", reg1, (show slotnumber)]
+            putCode ["sub_offset", reg, reg1, reg]
+            putCode ["load_indirect", reg, reg]
+            return (reg, t)
+        (Base _) -> error $ "A single index is used to access variable but the variable is not an array"
+        (Matrix _ _ _) -> error $ "A single index is supplied but two are needed for matrix access"
+-- TODO: test this (don't I need to compile expr and expr1?)
+compileExpr (MatrixRef pos id expr expr1) = do
+    (slotnumber, mode, ty) <- getVariable id 
+    case ty of
+        (Matrix t i j) -> do
+            reg <- allocateRegister
+            (_, expr_t) <- compileExpr expr
+            if (expr_t /= IntType) then
+                error $ "array index must be type int"
+            else return ()
+            incrementRegister reg
+            reg1 <- allocateRegister
+            (_, expr_t) <- compileExpr expr1
+            if (expr_t /= IntType) then
+                error $ "array index must be type int"
+            else return ()
+            incrementRegister reg1
+            reg2 <- allocateRegister
+            putCode ["int_const", reg2, (show j)]
+            putCode ["mul_int", reg, reg, reg2]
+            putCode ["add_int", reg, reg, reg1]
+            putCode ["load_address", reg1, (show slotnumber)]
+            putCode ["sub_offset", reg, reg1, reg]
+            putCode ["load_indirect", reg, reg]
+            return (reg, t)
+        (Base _) -> error $ "Two indices are used to access variable but the variable is not a matrix"
+        (Array _ _) -> error $ "Two indices are used to access variable but only one is needed for an array"
+compileExpr (BinOpExp pos binop expr expr1) = do
+    reg <- allocateRegister
+    (rg, ty) <- compileExpr expr
+    incrementRegister reg
+    (rg1, ty1) <- compileExpr expr1
+    (f1, f_haskell) <- case binop of
+        Op_add -> return ("add", (+))
+        Op_sub -> return ("sub", (-))
+        Op_mul -> return ("mul", (*))
+        Op_div -> return ("div", (/))
 
+    f2 <- case (ty == FloatType || ty1 == FloatType) of
+    -- if either argument are float, the result is float
+        True -> return "_real"
+    -- int, boolean and string are compared as int
+        False -> return "_int" 
+    case ty of
+        FloatType -> return ()
+        IntType -> return ()
+        _ -> error $ "binary operations must have arguments of type float or int"
+    case ty1 of
+        FloatType -> return ()
+        IntType -> return ()
+        _ -> error $ "binary operations must have arguments of type float or int"
+    -- convert float to int if necessary
+    if (ty == FloatType && ty1 == IntType) then
+        putCode ["int_to_real", rg1, rg1]
+    else return ()
+    if (ty1 == FloatType && ty == IntType) then
+        putCode ["int_to_real", rg, rg]
+    else return ()
+    putCode [f1++f2, reg, rg, rg1]
+    resultType <- if ty == IntType && ty1 == IntType then
+            return IntType
+        else
+            return FloatType
+    return (reg, resultType)
+compileExpr (UnaryMinus pos expr) = do
+    (rg, ty) <- compileExpr expr
+    f <- case ty of
+        FloatType -> return "real"
+        IntType -> return "int"
+        _ -> error $ "unary minus must have argument of type float of int"
+    putCode ["neg_" ++ f, rg, rg]
+    return (rg, ty)

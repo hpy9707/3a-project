@@ -1,0 +1,16 @@
+proc main()
+int a[5,5];
+int b;
+begin
+    a[3,4] := 3;
+    call p(a[3,4]);
+    write a[3,4];
+    write "\n";
+end
+
+proc p(ref int c)
+begin
+    write c;
+    write "\n";
+    c := 6;
+end

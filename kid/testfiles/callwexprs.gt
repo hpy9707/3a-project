@@ -1,0 +1,14 @@
+proc main()
+begin
+    call p(1, 1+2, 3+5+6);
+end
+
+proc p(val int a, val int b, val int c)
+begin
+    write a;
+    write "\n";
+    write b;
+    write "\n";
+    write c;
+    write "\n";
+end
