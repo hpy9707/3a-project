@@ -51,6 +51,7 @@ instance Monad Update where
                             in gen' st1
                     )
 
+-- retrieve state unmodified
 getState :: Update State
 getState = Update (\st -> (st, st))
 
@@ -89,13 +90,15 @@ getVariable id = do
     val <- return (Map.lookup id map)
     case val of
         (Just (i, p, t)) -> return (i, p, t)
-        Nothing -> error $ "variable " ++ id ++ " is referenced without declaration"
+        Nothing -> error $ "variable " ++ id 
+            ++ " is referenced without declaration"
 
 -- call this function to append an instruction to the generated code
 putCode :: [String] -> Update ()
 putCode (x:strings) = Update (\st ->
     let c = (code st) in
-    ((), st { code = c ++ "    " ++ x ++ " " ++ (concat (intersperse ", " strings)) ++ "\n"}))
+    ((), st { code = c ++ "    " ++ x ++ " " 
+        ++ (concat (intersperse ", " strings)) ++ "\n"}))
 
 -- increment label by 1
 incrementLabel :: Update ()
@@ -137,6 +140,7 @@ getSlotNext = do
     incrementSlot
     return s
 
+-- return current slot
 getSlotCurrent :: Update Int
 getSlotCurrent = do
     st <- getState
@@ -199,7 +203,8 @@ allocateRegister = do
     r <- return $ regCount st
     return ("r" ++ (show r))
 
--- compile the program and return a string of the Oz code compiled from a Goat program.
+-- compile the program and return a string of the 
+-- Oz code compiled from a Goat program.
 compileProgram :: Program -> String
 compileProgram (Program procs) =
     let
@@ -231,7 +236,8 @@ putProcedureList [] = do return ()
 
 -- takes a list of FormalArgSpec and returns list of their base types
 getArgTypeList :: [FormalArgSpec] -> [(ParMode, BaseType)]
-getArgTypeList ((FormalArgSpec _ pm t _):args) = ((pm, t):(getArgTypeList args))
+getArgTypeList ((FormalArgSpec _ pm t _):args)
+ = ((pm, t):(getArgTypeList args))
 getArgTypeList [] = []
 
 -- compile a list of procedures
@@ -257,14 +263,17 @@ compileProcedure (Procedure pos id args decls stmts) = do
     putCode ["return"]
     popVarStack
 
+-- calculate the stack size needed for a list of declarations
 countDeclListStackSize :: [Decl] -> Int
 countDeclListStackSize (x:decls) = (countDeclStackSize x)
  + (countDeclListStackSize decls)
 countDeclListStackSize [] = 0
 
+-- calculate the stack size needed for a single declaration
 countDeclStackSize :: Decl -> Int
 countDeclStackSize (Decl _ _ goatType) = countBaseStackSize goatType
 
+-- calculate the stack size needed for particular base types
 countBaseStackSize :: GoatType -> Int
 countBaseStackSize (Base _) = 1
 countBaseStackSize (Array _ n) = n
@@ -348,17 +357,31 @@ compileStmt (Read pos lvalue) = do
     -- value is stored in r0 because this is where builtin function takes
     -- its argument from
     reg0 <- allocateRegister
-    baseType <- compileLvalue lvalue reg0
+    -- get baseType of lvalue
+    id <- case lvalue of
+        LId _ ident -> return ident
+        LArrayRef _ ident _ -> return ident
+        LMatrixRef _ ident _ _ -> return ident
+    (slotNum, mode, goat_t) <- getVariable id
+    baseType <- case goat_t of
+        Base t -> return t
+        Array t _ -> return t
+        Matrix t _ _ -> return t
+    -- choose approproate function and call it
     func <- case baseType of
         BoolType -> return "read_bool"
         IntType -> return "read_int"
         FloatType -> return "read_real"
     putCode ["call_builtin", func]
+    -- assign to lvalue
+    compileLvalue lvalue reg0
+    return ()
 compileStmt (ProcCall pos id exprs) = do
     sig <- (getProcedure id)
     if length exprs /= length sig then
         error $ (show pos) ++ " function " ++ id ++ " must be called with "
-         ++ (show $ length $ sig) ++ " arguments, only " ++ (show $ length $ exprs) ++ " supplied"
+         ++ (show $ length $ sig) ++ " arguments, only "
+         ++ (show $ length $ exprs) ++ " supplied"
     else do 
         resetRegister
         compileExprList exprs sig
@@ -371,14 +394,17 @@ compileStmt (Assign pos lval expr) = do
         LArrayRef _ ident _ -> return ident
         LMatrixRef _ ident _ _ -> return ident
     (slotNum, mode, goat_t) <- getVariable id
-    -- make sure expression matches the Lvalue type (arrays must be accessed as arrays etc)
+    -- make sure expression matches the Lvalue type
+    -- (arrays must be accessed as arrays etc)
     decl_t <- case goat_t of
         Base t -> return t
         Array t _ -> return t
         Matrix t _ _ -> return t
     -- check that types are compatible
-    if (expr_t /= decl_t && not (expr_t == IntType && decl_t == FloatType)) then
-        error $ "cannot assign type " ++ (show expr_t) ++ " to type " ++ (show decl_t)
+    if (expr_t /= decl_t && 
+            not (expr_t == IntType && decl_t == FloatType)) then
+        error $ "cannot assign type " ++ (show expr_t)
+         ++ " to type " ++ (show decl_t)
     else
         return ()
     -- convert int to float if necessary
@@ -389,11 +415,59 @@ compileStmt (Assign pos lval expr) = do
     -- generate code for assigning r0 to lval
     compileLvalue lval reg0
     return ()
+--compile if   
+compileStmt(If pos expr stmt) = do 
+    (reg, t) <- compileExpr expr
+    if (t /= BoolType) then
+        error $ "If Else conditions must be of type Bool"
+    else return ()
+    label0 <- getLabelNext
+    label1 <- getLabelNext
+    putCode["branch_on_true",reg,label0]
+    putCode["branch_uncond",label1]
+    putLabel label0
+    compileStmtList stmt
+    putLabel label1
+--compile ifelse
+compileStmt(IfElse pos expr stmt1 stmt2)=do
+    (reg, t) <- compileExpr expr
+    if (t /= BoolType) then
+        error $ "If Else conditions must be of type Bool"
+    else return ()
+    label0 <- getLabelNext
+    label1 <- getLabelNext
+    label2 <- getLabelNext
+    putCode["branch_on_true",reg,label0]
+    putCode["branch_on_false",reg,label1]
+    putLabel label0
+    compileStmtList stmt1
+    putCode["branch_uncond",label2]
+    putLabel label1
+    compileStmtList stmt2
+    putLabel label2
+--compile while
+compileStmt(While pos expr stmt)=do
+    label0 <- getLabelNext
+    label1 <- getLabelNext
+    label2 <- getLabelNext
+    putLabel label0
+    (reg, t) <- compileExpr expr
+    if (t /= BoolType) then
+        error $ "If Else conditions must be of type Bool"
+    else return ()
+    putCode["branch_on_true", reg, label1]
+    putCode["branch_uncond",label2]
+    putLabel label1
+    compileStmtList stmt
+    putCode["branch_uncond",label0]
+    putLabel label2
 
+-- compile LValue
 compileLvalue :: Lvalue -> String -> Update (BaseType)
 compileLvalue (LId _ id) reg0 = do
     (slotNum, mode, goat_t) <- getVariable id
-    -- make sure LH expression matches the stored identifier's type (arrays must be accessed as arrays etc)
+    -- make sure LH expression matches the stored identifier's 
+    -- type (arrays must be accessed as arrays etc)
     baseType <- case goat_t of
         Base baseType -> return baseType
         _ -> error $ "single variables cannot by accessed like arrays or matrices"
@@ -409,7 +483,8 @@ compileLvalue (LId _ id) reg0 = do
     return (baseType)
 compileLvalue (LArrayRef _ id expr0) reg0 = do
     (slotNum, mode, goat_t) <- getVariable id
-    -- make sure LH expression matches the stored identifier's type (arrays must be accessed as arrays etc)
+    -- make sure LH expression matches the stored identifier's type 
+    -- (arrays must be accessed as arrays etc)
     baseType <- case goat_t of
         Array baseType _ -> return baseType
         _ -> error $ "array variables must be accessed with a single index"
@@ -427,7 +502,8 @@ compileLvalue (LArrayRef _ id expr0) reg0 = do
     return (baseType)
 compileLvalue (LMatrixRef _ id expr0 expr1) reg0 = do
     (slotNum, mode, goat_t) <- getVariable id
-    -- make sure LH expression matches the stored identifier's type (arrays must be accessed as arrays etc)
+    -- make sure LH expression matches the stored identifier's type 
+    -- (arrays must be accessed as arrays etc)
     (baseType, j) <- case goat_t of
         Matrix baseType _ j -> return (baseType, j)
         _ -> error $ "array variables must be accessed with a single index"
@@ -464,8 +540,11 @@ compileExprList (e:exprs) ((sigMode, sigT):sig) = do
             -- either a variable, array reference or matrix
             case e of
                 (Id _ id) -> do
-                    (slotNum, _, _) <- getVariable id
-                    putCode ["load_address", reg, show slotNum] 
+                    (slotNum, varMode, _) <- getVariable id
+                    f <- case varMode of
+                        Ref -> return "load"
+                        Val -> return "load_address"
+                    putCode [f, reg, show slotNum]
                 (ArrayRef _ id expr0) -> do
                     (slotNum, _, _) <- getVariable id
                     putCode ["load_address", reg, (show slotNum)]
@@ -500,8 +579,9 @@ compileExprList (e:exprs) ((sigMode, sigT):sig) = do
     compileExprList exprs sig
 compileExprList [] [] = do return ()
 
--- Compile an expression and return its register number, type and value
+-- Compile an expression and return its register number and type
 compileExpr :: Expr -> Update (String, BaseType)
+-- Various contansts
 compileExpr (StrCon pos val) = do
     reg <- allocateRegister
     putCode ["string_const", reg, "\"" ++ val ++ "\""]
@@ -521,6 +601,7 @@ compileExpr (BoolCon pos val) = do
         False -> return 0
     putCode ["int_const", reg, (show bool)]
     return (reg, BoolType)
+-- And operator
 compileExpr (And pos expr expr1) = do
     reg <- allocateRegister
     (rg, ty) <- compileExpr expr
@@ -537,6 +618,7 @@ compileExpr (And pos expr expr1) = do
                     putCode ["and", reg, rg, rg1]
                     putLabel label0
                     return (reg, BoolType)
+-- Or operator
 compileExpr (Or pos expr expr1) = do
     reg <- allocateRegister
     (rg, ty) <- compileExpr expr
@@ -553,6 +635,7 @@ compileExpr (Or pos expr expr1) = do
                     putCode ["or", reg, rg, rg1]
                     putLabel label0
                     return (reg, BoolType)
+-- Not operator
 compileExpr (Not pos expr) = do
     reg <- allocateRegister
     (rg, ty) <- compileExpr expr
@@ -561,6 +644,7 @@ compileExpr (Not pos expr) = do
         else do
             putCode ["not", reg, rg]
             return (reg, BoolType)
+-- Reational operators
 compileExpr (Rel pos relop expr expr1) = do
     reg <- allocateRegister
     (rg, ty) <- compileExpr expr
@@ -569,10 +653,13 @@ compileExpr (Rel pos relop expr expr1) = do
     
     if (relop == Op_eq || relop == Op_ne) then
         if ty /= ty1
-            then error $ "arguments for Equal and NotEqual must have the same type"
+            then error $ "arguments for Equal and NotEqual"
+             ++ "must have the same type"
         else return ()
-    else if (ty == IntType || ty == FloatType) && (ty1 /= IntType && ty1 /= FloatType)
-        then error $ "Comparison between incomensurable types, " ++ (show ty) ++ "and " ++ (show ty1)
+    else if (ty == IntType || ty == FloatType)
+             && (ty1 /= IntType && ty1 /= FloatType)
+        then error $ "Comparison between incomensurable types, "
+         ++ (show ty) ++ "and " ++ (show ty1)
     else return ()
     f1 <- case relop of
         Op_eq -> return "cmp_eq"
@@ -595,6 +682,7 @@ compileExpr (Rel pos relop expr expr1) = do
     else return ()
     putCode [f1++f2, reg, rg, rg1]
     return (reg, BoolType)
+-- Identifier (variable)
 compileExpr (Id pos id) = do
     reg <- allocateRegister
     (slotNum, mode, goatType) <- getVariable id
@@ -604,15 +692,16 @@ compileExpr (Id pos id) = do
         (Matrix _ _ _) -> error $ "Matrix must be referenced with two indices"
     case mode of
         Ref -> do
-            -- First load the reference address then use load_indirect to load the actual value
+            -- First load the reference address then use load_indirect
+            --  to load the actual value
             putCode ["load", reg, (show slotNum)]
             putCode ["load_indirect", reg, reg]
         Val -> do
             putCode ["load", reg, (show slotNum)]            
     return (reg, t)
+-- Array variable
 compileExpr (ArrayRef pos id expr) = do
     (slotnumber, mode, ty) <- getVariable id
-    -- TODO: handle other cases than IntCon 
     case ty of
         (Array t i) -> do
             reg <- allocateRegister
@@ -626,9 +715,11 @@ compileExpr (ArrayRef pos id expr) = do
             putCode ["sub_offset", reg, reg1, reg]
             putCode ["load_indirect", reg, reg]
             return (reg, t)
-        (Base _) -> error $ "A single index is used to access variable but the variable is not an array"
-        (Matrix _ _ _) -> error $ "A single index is supplied but two are needed for matrix access"
--- TODO: test this (don't I need to compile expr and expr1?)
+        (Base _) -> error $ "A single index is used to access "
+         ++ "variable but the variable is not an array"
+        (Matrix _ _ _) -> error $ "A single index is supplied but "
+         ++ "two are needed for matrix access"
+-- Matrix variable
 compileExpr (MatrixRef pos id expr expr1) = do
     (slotnumber, mode, ty) <- getVariable id 
     case ty of
@@ -653,8 +744,11 @@ compileExpr (MatrixRef pos id expr expr1) = do
             putCode ["sub_offset", reg, reg1, reg]
             putCode ["load_indirect", reg, reg]
             return (reg, t)
-        (Base _) -> error $ "Two indices are used to access variable but the variable is not a matrix"
-        (Array _ _) -> error $ "Two indices are used to access variable but only one is needed for an array"
+        (Base _) -> error $ "Two indices are used to access variable "
+         ++ "but the variable is not a matrix"
+        (Array _ _) -> error $ "Two indices are used to access variable "
+         ++ "but only one is needed for an array"
+-- Binary operators
 compileExpr (BinOpExp pos binop expr expr1) = do
     reg <- allocateRegister
     (rg, ty) <- compileExpr expr
@@ -692,6 +786,7 @@ compileExpr (BinOpExp pos binop expr expr1) = do
         else
             return FloatType
     return (reg, resultType)
+-- Unary minus operator
 compileExpr (UnaryMinus pos expr) = do
     (rg, ty) <- compileExpr expr
     f <- case ty of

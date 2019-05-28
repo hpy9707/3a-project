@@ -1,4 +1,11 @@
 proc main()
+int a;
 begin
-    if (a < 3) then a := 1; else a:=2; fi
+    a := 4;
+    if (a < 3) then
+        write "true\n";
+    else
+        write "false\n";
+    fi
+    write "rest\n";
 end

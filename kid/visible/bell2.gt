@@ -1,0 +1,36 @@
+# Calculate Bell numbers
+
+proc main()
+    int a[2];
+    int n; 
+    int result[8];
+begin
+    write "Type integer n: ";
+    read n;
+    a[1] := 0;
+    call bell(n, a[1], result[5]);
+    write "Bell(n) is: ";
+    write result[5];
+    write "\n";
+end
+
+proc bell(val int n, val int m, ref int out)
+    int res1; 
+    int res2;
+begin
+    #write n;
+    #write m;
+    #write "\n";
+    if m = 0 then
+        if n = 0 then
+            out := 1;
+        else 
+            call bell(n - 1, n - 1, out);
+        fi
+    else 
+        call bell(n, m - 1, res1);
+        call bell(n - 1, m - 1, res2);
+        out := res1 + res2;
+    fi
+end
+
